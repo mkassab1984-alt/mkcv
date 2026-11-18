@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#001f3f" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>mamdouh kassab ismail — senior bilingual content writer, marketing consultant &amp; creative director</title>
+    <meta
+      name="description"
+      content="Mamdouh Kassab Ismail — Senior Bilingual Content Writer, Marketing Consultant &amp; Creative Director in Jeddah, Saudi Arabia. 15+ years across corporate content, Arabic/English localization, government technical proposals, campaigns, and television."
+    />
+    <link rel="icon" href="./tree/icon/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./tree/css/style.css" />
+  </head>
+  <body>
+    <!-- Hidden SVG Hand-Printed Letterpress Ink Roughening Filter -->
+    <svg width="0" height="0" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none">
+      <defs>
+        <filter id="ink-roughen" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="7" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="1.45" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- 100% world-space physical branching canvas (zero HTML modals or popups) -->
+    <canvas
+      id="sheet"
+      aria-label="mamdouh kassab ismail: work with me, projects, writing, me"
+    ></canvas>
+
+    <!-- Full-viewport top-layer monochromatic risograph/lithograph grain overlay (z-index: 9999) -->
+    <div id="film-grain" class="film-grain" aria-hidden="true"></div>
+
+    <!-- Bottom-left botanical back button (68x38, hidden at Home root) -->
+    <button type="button" id="btn-back" class="back-pill" title="Step back" aria-label="Step back" hidden>
+      <svg class="back-twig-svg" width="68" height="38" viewBox="0 0 68 38" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M27.5 12.2 C23.5 14.5 20.2 17.2 18.5 19.2 C20.4 21.3 23.6 24.1 27.2 26.2 C28.1 25.4 25.8 22.1 23.8 20.3 L45.5 20.1 C46.4 20.0 46.5 18.3 45.4 18.2 L23.9 18.1 C25.9 16.3 28.3 13.1 27.5 12.2 Z" fill="#001830" />
+        <path d="M31.5 16.8 C31.8 13.6 34.4 11.2 36.8 11.0 C36.9 13.5 34.8 16.1 31.5 16.8 Z" fill="#001830" />
+        <circle cx="49.8" cy="19.1" r="2.0" fill="#001830" />
+      </svg>
+    </button>
+
+    <!-- Whisper-subtle language toggle (top-right in EN, top-left in AR) -->
+    <div class="corner-controls">
+      <button type="button" id="btn-lang" class="ghost-toggle" title="Switch Arabic / English">
+        عربي
+      </button>
+    </div>
+
+    <!-- Bottom-right expandable music widget + clickable whisper + hand-drawn curved arrow + fluttering moth -->
+    <div class="music-corner music-dock" id="music-corner">
+      <div
+        class="music-note-wrap music-whisper"
+        id="music-note-wrap"
+        role="button"
+        tabindex="0"
+        title="Play or pause music"
+        aria-label="Play or pause music"
+      >
+        <svg
+          class="curved-arrow"
+          viewBox="0 0 36 46"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            d="M28 5.5 C 14 5.5, 9.5 15.5, 10.2 39.5"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+          />
+          <path
+            d="M5.6 34.2 L 10.2 40.8 L 15.0 34.4"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <div class="music-note-text" id="music-note-text">
+          maybe you'll know me better<br />if you listen to what i like!
+        </div>
+      </div>
+
+      <div class="music-playlist playlist-drawer" id="music-playlist" role="region" aria-label="Music playlist" hidden>
+        <div class="playlist-header" id="playlist-header">
+          <span id="playlist-label">music playlist · 5 tracks</span>
+          <span id="playlist-mode">sequential</span>
+        </div>
+        <div class="playlist-yt-hint" id="playlist-yt-hint" hidden></div>
+        <ul class="playlist-list" id="playlist-list"></ul>
+      </div>
+
+      <div class="capsule-stage">
+        <!-- Tiny hand-drawn silver moth fluttering gently above right side of capsule -->
+        <svg
+          class="capsule-moth"
+          width="18"
+          height="16"
+          viewBox="0 0 18 16"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            d="M8.8 8.2 C6.2 4.4 2.4 2.8 1.6 4.4 C0.9 5.8 4.1 8.5 8.2 9.1 Z"
+            fill="#C6CAD2"
+          />
+          <path
+            d="M9.4 8.3 C11.9 5.1 15.6 4.6 16.2 6.2 C16.7 7.6 13.2 9.6 9.2 9.4 Z"
+            fill="#DCE0E8"
+          />
+          <path
+            d="M8.5 9.0 C6.2 10.2 5.4 11.8 6.6 12.3 C7.6 12.7 8.7 11.0 9.0 9.5 Z"
+            fill="#B8BCC6"
+          />
+          <path
+            d="M8.9 7.5 L8.2 14.2"
+            stroke="#C6CAD2"
+            stroke-width="1.05"
+            stroke-linecap="round"
+          />
+        </svg>
+
+        <div class="music-pill music-capsule" id="music-pill" role="region" aria-label="Music player">
+          <button type="button" id="btn-play" class="pill-icon-btn pill-play-btn" title="Play or pause" aria-label="Play or pause">
+            <svg class="play-svg" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path id="play-icon-path" d="M2.6 1.9L12.1 7L2.6 12.1V1.9Z" fill="#001830" stroke="#001830" stroke-width="0.8" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <button type="button" id="track-title" class="track-title-btn" title="Toggle music playlist">
+            akira yamaoka · pianissimo epilogue
+          </button>
+          <button
+            type="button"
+            id="btn-expand-playlist"
+            class="pill-icon-btn pill-caret-btn"
+            title="Toggle playlist"
+            aria-label="Toggle playlist"
+            aria-expanded="false"
+          >
+            <svg class="caret-svg" width="8" height="6" viewBox="0 0 8 6" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M4 0.7L7.5 5.3H0.5L4 0.7Z" fill="#001830" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="btn-external-yt"
+            class="pill-icon-btn pill-ext-btn"
+            title="Open current track on YouTube"
+            aria-label="Open current track on YouTube"
+          >
+            <svg class="ext-svg" width="13" height="13" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M4 10L10 4M5.5 4H10V8.5" stroke="#001830" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="btn-next-track"
+            class="pill-icon-btn pill-next-btn"
+            title="Next track"
+            aria-label="Next track"
+          >
+            <svg class="next-svg" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M2 2.5L9.5 7L2 11.5V2.5Z" fill="#001830" />
+              <rect x="10.2" y="2.5" width="2" height="9" rx="0.5" fill="#001830" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Subtle hand-drawn silver grass blades peeking below/around the bottom edge -->
+        <svg
+          class="capsule-grass"
+          viewBox="0 0 340 12"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path d="M8 12L5 4M26 12L29 3M34 12L32 5M54 12L58 4M76 12L74 6M158 12L155 4M176 12L180 3M192 12L189 4M210 12L215 3M228 12L225 5M248 12L253 4M268 12L265 4M286 12L291 3M304 12L301 5M322 12L327 4" stroke="#C4C8D2" stroke-width="1.25" stroke-linecap="round" opacity="0.86" />
+        </svg>
+      </div>
+    </div>
+
+    <div id="yt-music-mount" aria-hidden="true"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="music/playlist.js"></script>
+    <script src="./tree/src/data.js"></script>
+    <script src="./tree/src/main.js"></script>
+  </body>
+</html>
