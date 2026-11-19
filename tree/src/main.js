@@ -55,12 +55,35 @@
   const BUF_SCALE = 2.0;
 
   const WORLD_HORIZON_SPAN = 3200;
-  const UNDERGROUND_DEPTH = 700;
+  const UNDERGROUND_DEPTH = 1500;
   const TWIG_SHOOT_LEN = 58;
 
-  const BRANCH_KEYS = ["work", "projects", "writing", "me"];
+  const BRANCH_KEYS = ["work", "experience", "writing", "me"];
   const ITEM_COL_WIDTH = 288;
   const DETAIL_COL_WIDTH = 316;
+
+  // Arching leafy experience bough geometry (~650px span, ~60 deg crown base -> ~16 deg slender tip)
+  const EXP_BOUGH_GEOM = {
+    x0: 146,
+    y0: -432,
+    cx1: 274,
+    cy1: -654,
+    cx2: 476,
+    cy2: -763,
+    x3: 668,
+    y3: -818
+  };
+
+  const EXP_PUFF_SPECS = [
+    { t: 0.08, rx: 48, ry: 36, d: 260, nOff: -3, fg: false },
+    { t: 0.18, rx: 44, ry: 33, d: 235, nOff: -4, fg: true },
+    { t: 0.29, rx: 40, ry: 30, d: 210, nOff: -3, fg: false },
+    { t: 0.41, rx: 36, ry: 27, d: 185, nOff: -4, fg: true },
+    { t: 0.54, rx: 31, ry: 24, d: 160, nOff: -3, fg: false },
+    { t: 0.68, rx: 22, ry: 18, d: 120, nOff: 5, fg: true },
+    { t: 0.80, rx: 18, ry: 15, d: 98, nOff: -9, fg: true },
+    { t: 0.89, rx: 16, ry: 14, d: 86, nOff: -8, fg: true }
+  ];
 
   let lang = "en";
   let activeBranch = null;
@@ -78,11 +101,16 @@
   let introCamRem = 1;
   let hasOpenedAnyBranch = false;
 
-  const mainTwigGrow = { work: 0, projects: 0, writing: 0, me: 0 };
-  const mainLabelType = { work: 0, projects: 0, writing: 0, me: 0 };
-  const mainLabelErasing = { work: false, projects: false, writing: false, me: false };
-  const underlineProg = { work: 0, projects: 0, writing: 0, me: 0 };
-  const branchLimbGrow = { work: 0, projects: 0, writing: 0, me: 0 };
+  let expBoughRaw = 0;
+  let expBoughGrow = 0;
+  let meProjectsHeadingType = 0;
+  let meProjectsHeadingErasing = false;
+
+  const mainTwigGrow = { work: 0, experience: 0, writing: 0, me: 0 };
+  const mainLabelType = { work: 0, experience: 0, writing: 0, me: 0 };
+  const mainLabelErasing = { work: false, experience: false, writing: false, me: false };
+  const underlineProg = { work: 0, experience: 0, writing: 0, me: 0 };
+  const branchLimbGrow = { work: 0, experience: 0, writing: 0, me: 0 };
 
   const subTwigGrow = {};
   const itemType = {};
@@ -101,6 +129,7 @@
   const cam = { x: 0, y: -300, zoom: 1 };
   const baseCam = { x: 0, y: -300, zoom: 1 };
   const targetCam = { x: 0, y: -300, zoom: 1 };
+  const defaultTargetCam = { x: 0, y: -300, zoom: 1 };
   const panOffset = { x: 0, y: 0 };
 
   // Procedural offscreen assets, growth-order stipple buffers & world props
@@ -127,6 +156,8 @@
   let lastHeaderScreenBox = null;
   let lastBioScreenBox = null;
   let lastPortraitScreenBox = null;
+  let lastExpYearScreenBoxes = [];
+  let lastMeProjectsScreenBoxes = [];
   let frameStrokeTextCalls = 0;
   let frameFillTextCalls = 0;
   let totalStrokeTextCalls = 0;
@@ -137,8 +168,13 @@
   let mistyCloudBuffer = null;
   let mossBuffer = null;
   let terraceBuffer = null;
+  let expLeafPuffBuffers = [];
 
   let stars = [];
+  const starMouse = { x: 0, y: 0 };
+  const starMouseTarget = { x: 0, y: 0 };
+  const starCursorScreen = { x: -9999, y: -9999, active: false };
+  let lastRenderedStars = [];
   let meBioType = 0;
   let meBioErasing = false;
   let mePortraitBuffer = null;
@@ -605,7 +641,7 @@
 
     const zx = (vw - padX * 2) / boxW;
     const zy = (vh - padTop - padBot) / boxH;
-    const z = clamp(Math.min(zx, zy), 0.38, 1.38);
+    const z = clamp(Math.min(zx, zy), 0.32, 1.38);
 
     const cx = (minX + maxX) * 0.5;
     const cy = (minY + maxY) * 0.5;
@@ -790,6 +826,184 @@
     }
   }
 
+  function computeExperienceBoughLayout(bCfg) {
+    syncCanvasFontVars();
+    resetCanvasLetterSpacing();
+    const isMobile = vw < 680;
+    const isTablet = vw >= 680 && vw < 1024;
+    const detailColWidth = isMobile ? 284 : isTablet ? 318 : 344;
+    const G = EXP_BOUGH_GEOM;
+
+    // 5 alternating year-twig angles & offsets matching reference 2D03B4ED
+    const twigConfigs = [
+      { t: 0.20, side: "right", angle: 0.08, len: 40, baseOffX: 12, baseOffY: 4 },
+      { t: 0.38, side: "left", angle: -2.22, len: 42, baseOffX: -8, baseOffY: -8 },
+      { t: 0.56, side: "right", angle: 0.20, len: 38, baseOffX: 8, baseOffY: 6 },
+      { t: 0.74, side: "left", angle: -1.72, len: 38, baseOffX: -2, baseOffY: -4 },
+      { t: 0.93, side: "right", angle: 0.48, len: 36, baseOffX: 2, baseOffY: 2 }
+    ];
+
+    const yearNodes = (bCfg.items || []).map((it, idx) => {
+      const cfg = twigConfigs[idx] || {
+        t: typeof it.t === "number" ? it.t : 0.2 + idx * 0.18,
+        side: it.twigSide || (idx % 2 === 0 ? "right" : "left"),
+        angle: idx % 2 === 0 ? 0.15 : -2.0,
+        len: 38,
+        baseOffX: 0,
+        baseOffY: 0
+      };
+      const bx = evalCubic(G.x0, G.cx1, G.cx2, G.x3, cfg.t);
+      const by = evalCubic(G.y0, G.cy1, G.cy2, G.y3, cfg.t);
+      const startX = bx + cfg.baseOffX;
+      const startY = by + cfg.baseOffY;
+      const tipX = startX + Math.cos(cfg.angle) * cfg.len;
+      const tipY = startY + Math.sin(cfg.angle) * cfg.len;
+
+      const rawLabel = it.yearLabel || it.title || "";
+      const activeText = rawLabel + ".";
+      ctx.font = canvasFont("600 14.8px", activeText);
+      const fullW = ctx.measureText(activeText).width;
+      ctx.font = canvasFont("500 14.8px", rawLabel);
+      const idleW = ctx.measureText(rawLabel).width;
+
+      const isRightSide = cfg.side === "right";
+      const labelGap = 10;
+      const labelY = tipY + (cfg.side === "left" ? -2 : 1);
+      const boxLeft = isRightSide ? tipX + labelGap : tipX - labelGap - fullW;
+      const boxRight = boxLeft + fullW;
+
+      // Measure Level-2 roles & bullets for this year node
+      const roles = Array.isArray(it.roles) ? it.roles : [];
+      const measuredRoles = roles.map((r) => {
+        const metaStr = [r.company, r.period].filter(Boolean).join("  ·  ");
+        const metaFont = `500 ${lang === "ar" || hasArabicChars(metaStr) ? "11.4px" : "10.8px"} ${fontFamilyFor(metaStr)}`;
+        const metaLines = wrapLines(metaStr, detailColWidth, metaFont);
+        const roleLines = wrapLines(r.role, detailColWidth, canvasFont("600 13.8px", r.role));
+        const bulletLines = [];
+        (r.bullets || []).forEach((bText) => {
+          const prefixed = "• " + bText;
+          const bWrapped = wrapLines(prefixed, detailColWidth - 6, canvasFont("400 12.6px", prefixed));
+          bWrapped.forEach((ln, li) => {
+            bulletLines.push({
+              text: ln,
+              indent: li > 0 ? 10 : 0,
+              afterGap: li === bWrapped.length - 1 ? 3.5 : 0
+            });
+          });
+        });
+        let h = metaLines.length * 15.5 + 2 + roleLines.length * 18.2 + 5;
+        bulletLines.forEach((bl) => {
+          h += 16.8 + bl.afterGap;
+        });
+        return {
+          raw: r,
+          metaStr,
+          metaLines,
+          roleLines,
+          bulletLines,
+          height: h
+        };
+      });
+
+      let detailH = 24; // collapse header row
+      measuredRoles.forEach((mr, rIdx) => {
+        detailH += mr.height + (rIdx < measuredRoles.length - 1 ? 14 : 4);
+      });
+
+      const shootDir = isRightSide ? 1 : -1;
+      const shootSpan = isMobile ? 48 : 74;
+      const s2StartX = isRightSide ? boxRight + 10 : boxLeft - 10;
+      const s2StartY = labelY;
+      const s2TipX = s2StartX + shootDir * shootSpan;
+
+      let cardTopY = labelY - Math.min(48, detailH * 0.18);
+      const maxAllowedBottomY = isRightSide ? -46 : -548;
+      if (cardTopY + detailH > maxAllowedBottomY) {
+        cardTopY = maxAllowedBottomY - detailH;
+      }
+      if (cardTopY < -980) cardTopY = -980;
+
+      const cardLeft = shootDir > 0 ? s2TipX + 14 : s2TipX - 14 - detailColWidth;
+      const cardRight = cardLeft + detailColWidth;
+
+      return {
+        item: it,
+        idx,
+        t: cfg.t,
+        side: cfg.side,
+        isRightSide,
+        angle: cfg.angle,
+        len: cfg.len,
+        bx,
+        by,
+        startX,
+        startY,
+        tipX,
+        tipY,
+        rawLabel,
+        activeText,
+        idleW,
+        fullW,
+        labelY,
+        boxLeft,
+        boxRight,
+        shootDir,
+        s2StartX,
+        s2StartY,
+        s2TipX,
+        cardTopY,
+        cardLeft,
+        cardRight,
+        detailColWidth,
+        detailH,
+        measuredRoles
+      };
+    });
+
+    const tipX = bCfg.attachX + Math.cos(bCfg.angle) * TWIG_SHOOT_LEN;
+    const tipY = bCfg.attachY + Math.sin(bCfg.angle) * TWIG_SHOOT_LEN;
+    ctx.font = canvasFont("600 15px", `${bCfg.label}.`);
+    const branchLabelW = ctx.measureText(`${bCfg.label}.`).width;
+    const openBranchLabelLeft = tipX + 12;
+    const openBranchLabelRight = openBranchLabelLeft + branchLabelW;
+    const openBranchLabelY = tipY + 6;
+
+    const minYearX = Math.min(
+      G.x0 - 20,
+      openBranchLabelLeft - 8,
+      ...yearNodes.map((yn) => Math.min(yn.boxLeft, yn.bx - 48))
+    );
+    const maxYearX = Math.max(
+      G.x3 + 22,
+      openBranchLabelRight + 8,
+      ...yearNodes.map((yn) => yn.boxRight + 8)
+    );
+    const minYearY = Math.min(
+      G.y3 - 28,
+      ...yearNodes.map((yn) => yn.labelY - 22)
+    );
+    const maxYearY = Math.max(
+      openBranchLabelY + 18,
+      G.y0 + 18
+    );
+
+    return {
+      geom: G,
+      yearNodes,
+      detailColWidth,
+      tipX,
+      tipY,
+      branchLabelW,
+      openBranchLabelLeft,
+      openBranchLabelRight,
+      openBranchLabelY,
+      minYearX,
+      maxYearX,
+      minYearY,
+      maxYearY
+    };
+  }
+
   function computeMeEditorialLayout(bCfg, lay) {
     const isStackMobile = vw < 680;
     const isCompactTablet = vw >= 680 && vw < 960;
@@ -806,7 +1020,7 @@
     const baseBioLeft = isStackMobile ? 276 : 294;
     const bioLeft = Math.max(baseBioLeft, Math.ceil(openLabelRight + (isStackMobile ? 16 : 22)));
     const bioRight = bioLeft + bioColW;
-    const bioTopY = isStackMobile ? -532 : -436;
+    const bioTopY = isStackMobile ? -532 : -448;
     const lineH = isStackMobile ? 20.4 : 21.5;
     const paraGap = isStackMobile ? 11.0 : 13.5;
 
@@ -849,22 +1063,115 @@
     });
 
     const visibleBioH = Math.max(0, totalBioH - paraGap);
-    const bioBottomY = bioTopY + totalBioH;
+    const bioBottomY = bioTopY + visibleBioH;
+
+    // Direct clickable contact links row right beneath the 3 bio paragraphs
+    const contactActions = Array.isArray(bCfg.contactActions) ? bCfg.contactActions : [];
+    const contactRows = layoutActionRows(contactActions, bioColW);
+    const contactRowH = 22;
+    const contactTopY = bioBottomY + 12;
+    const contactBottomY =
+      contactRows.length > 0 ? contactTopY + contactRows.length * contactRowH : bioBottomY;
+
     const pw = isStackMobile ? 168 : isCompactTablet ? 204 : 228;
     const aspect = mePortraitBuffer
       ? mePortraitBuffer.height / mePortraitBuffer.width
       : 600 / 476;
     const ph = pw * aspect;
     const px = isStackMobile ? bioLeft + (bioColW - pw) * 0.5 : bioRight + (isCompactTablet ? 34 : 46);
-    const py = isStackMobile ? bioBottomY + 8 : bioTopY + Math.max(-12, (visibleBioH - ph) * 0.42);
+    const py = isStackMobile ? contactBottomY + 16 : bioTopY + Math.max(-10, (visibleBioH - ph) * 0.35);
 
     const rotPadX = ph * 0.032 + 6;
     const rotPadY = pw * 0.032 + 6;
 
-    const minContentX = Math.min(lay.tipX - 8, openLabelLeft - 8, bioLeft - 10);
-    const maxContentX = Math.max(openLabelRight + 8, bioRight + 10, px + pw + rotPadX);
+    const topSectionBottomY = isStackMobile
+      ? py + ph + rotPadY
+      : Math.max(contactBottomY, py + ph + rotPadY * 0.6);
+
+    // Selected Projects sub-section directly beneath the bio & portrait
+    const projectsHeading = bCfg.projectsHeading || (lang === "ar" ? "مشاريع مختارة." : "selected projects.");
+    ctx.font = canvasFont("600 15.2px", projectsHeading);
+    const projectsHeadingW = ctx.measureText(projectsHeading).width;
+
+    const stemX = bioLeft - (isStackMobile ? 16 : 22);
+    const projectsHeadingY = topSectionBottomY + (isStackMobile ? 28 : 32);
+    const projColW = isStackMobile ? bioColW : isCompactTablet ? 348 : 392;
+    const projDetailW = isStackMobile ? 284 : isCompactTablet ? 316 : 344;
+    const projLeft = bioLeft;
+    const projRight = projLeft + projColW;
+    const projVGap = isStackMobile ? 15 : 18;
+
+    let projCursorY = projectsHeadingY + 32;
+    const measuredProjects = (bCfg.items || []).map((it, idx) => {
+      const titleLines = wrapLines(it.title, projColW, canvasFont("600 13.6px", it.title + "  +"));
+      const sumLines = wrapLines(it.summary, projColW, canvasFont("400 12.3px", it.summary));
+      const metaH = it.meta ? 14 : 0;
+      const blockH = metaH + titleLines.length * 17.6 + 3 + sumLines.length * 15.8 + 8;
+
+      const bodyParas = (it.body || []).map((p) =>
+        wrapLines(p, projDetailW, canvasFont("400 13px", p))
+      );
+      const tagText =
+        Array.isArray(it.tags) && it.tags.length
+          ? it.tags.map((t) => "#" + t).join("   ")
+          : "";
+      const tagFont = `400 ${lang === "ar" || hasArabicChars(tagText) ? "11.5px" : "11px"} ${fontFamilyFor(tagText)}`;
+      const tagLines = tagText ? wrapLines(tagText, projDetailW, tagFont) : [];
+
+      let detailH = 22;
+      for (const pl of bodyParas) detailH += pl.length * 18.8 + 9;
+      if (tagLines.length > 0) detailH += tagLines.length * 15.5 + 5;
+
+      const topY = projCursorY;
+      const jointY = topY + 14;
+      const lvl2StartX = projRight + 12;
+      const lvl2TipX = lvl2StartX + (isStackMobile ? 46 : 68);
+      const lvl2TopY = topY - 4;
+      const lvl2BoxLeft = lvl2TipX + 14;
+      const lvl2BoxRight = lvl2BoxLeft + projDetailW;
+
+      projCursorY += blockH + projVGap;
+
+      return {
+        item: it,
+        idx,
+        topY,
+        jointY,
+        blockH,
+        detailH,
+        projLeft,
+        projRight,
+        projColW,
+        projDetailW,
+        titleLines,
+        sumLines,
+        bodyParas,
+        tagLines,
+        lvl2StartX,
+        lvl2TipX,
+        lvl2TopY,
+        lvl2BoxLeft,
+        lvl2BoxRight
+      };
+    });
+
+    const projectsBottomY =
+      measuredProjects.length > 0 ? projCursorY - projVGap : projectsHeadingY + 24;
+
+    // Initial framing box shows bio + portrait + contact + Selected Projects heading & lead projects cleanly
+    const initialBottomY =
+      measuredProjects.length > 0
+        ? Math.min(
+            projectsBottomY,
+            measuredProjects[Math.min(1, measuredProjects.length - 1)].topY +
+              measuredProjects[Math.min(1, measuredProjects.length - 1)].blockH
+          )
+        : topSectionBottomY + 12;
+
+    const minContentX = Math.min(lay.tipX - 10, openLabelLeft - 10, stemX - 10);
+    const maxContentX = Math.max(openLabelRight + 10, bioRight + 12, projRight + 12, px + pw + rotPadX);
     const minContentY = Math.min(bioTopY - 18, py - rotPadY, lay.tipY - 72);
-    const maxContentY = Math.max(bioBottomY + 10, py + ph + rotPadY);
+    const maxContentY = isStackMobile ? contactBottomY + ph + rotPadY + 28 : initialBottomY;
 
     return {
       isStackMobile,
@@ -873,6 +1180,10 @@
       bioRight,
       bioTopY,
       bioBottomY,
+      contactRows,
+      contactRowH,
+      contactTopY,
+      contactBottomY,
       totalBioH,
       totalChars,
       lineH,
@@ -885,11 +1196,100 @@
       py,
       rotPadX,
       rotPadY,
+      topSectionBottomY,
+      stemX,
+      projectsHeading,
+      projectsHeadingW,
+      projectsHeadingY,
+      projColW,
+      projDetailW,
+      projLeft,
+      projRight,
+      measuredProjects,
+      projectsBottomY,
       minContentX,
       maxContentX,
       minContentY,
       maxContentY
     };
+  }
+
+  function computeActiveContentBounds() {
+    const d = getLocale();
+    if (!activeBranch || !d || !d.branches || !d.branches[activeBranch]) {
+      const hb = computeHomeWorldBounds();
+      return {
+        minX: hb.minWX - 160,
+        maxX: hb.maxWX + 160,
+        minY: hb.minWY - 120,
+        maxY: hb.maxWY + 200
+      };
+    }
+
+    const bCfg = d.branches[activeBranch];
+    if (activeBranch === "experience") {
+      const expLay = computeExperienceBoughLayout(bCfg);
+      let minX = Math.min(0, expLay.minYearX - 36);
+      let maxX = expLay.maxYearX + 36;
+      let minY = expLay.minYearY - 36;
+      let maxY = Math.max(-290, expLay.maxYearY + 36);
+      if (activeItem) {
+        const yn = expLay.yearNodes.find((n) => n.item.id === activeItem);
+        if (yn) {
+          minX = Math.min(minX, yn.cardLeft - 28);
+          maxX = Math.max(maxX, yn.cardRight + 28);
+          minY = Math.min(minY, yn.cardTopY - 28);
+          maxY = Math.max(maxY, yn.cardTopY + yn.detailH + 34);
+        }
+      }
+      return { minX, maxX, minY, maxY };
+    }
+
+    const lay = computeBranchLayout(bCfg);
+    if (activeBranch === "me") {
+      const meLay = computeMeEditorialLayout(bCfg, lay);
+      let minX = Math.min(40, meLay.minContentX - 28);
+      let maxX = meLay.maxContentX + 28;
+      let minY = meLay.minContentY - 28;
+      let maxY = meLay.projectsBottomY + 56;
+      if (activeItem) {
+        const mp = meLay.measuredProjects.find((p) => p.item.id === activeItem);
+        if (mp) {
+          maxX = Math.max(maxX, mp.lvl2BoxRight + 28);
+          maxY = Math.max(maxY, mp.lvl2TopY + mp.detailH + 44);
+        }
+      }
+      return { minX, maxX, minY, maxY };
+    }
+
+    let minX = lay.minX - 40;
+    let maxX = lay.maxX + 40;
+    let minY = Math.min(bCfg.attachY - 40, lay.topY - 40);
+    let maxY = Math.max(-40, lay.bottomY + 40);
+    if (activeItem) {
+      const found = lay.measuredItems.find((m) => m.item.id === activeItem);
+      if (found) {
+        minX = Math.min(minX, found.lvl2BoxLeft - 32);
+        maxX = Math.max(maxX, found.lvl2BoxRight + 32);
+        minY = Math.min(minY, found.lvl2TopY - 32);
+        maxY = Math.max(maxY, found.lvl2TopY + found.detailH + 36);
+      }
+    }
+    return { minX, maxX, minY, maxY };
+  }
+
+  function recordDefaultTargetAndApplyInstant(instant, isHome) {
+    defaultTargetCam.x = targetCam.x;
+    defaultTargetCam.y = targetCam.y;
+    defaultTargetCam.zoom = targetCam.zoom;
+    if (instant) {
+      baseCam.x = targetCam.x;
+      baseCam.y = targetCam.y;
+      baseCam.zoom = targetCam.zoom;
+      cam.x = baseCam.x;
+      cam.y = baseCam.y;
+      cam.zoom = isHome ? baseCam.zoom * (1 + 0.05 * introCamRem) : baseCam.zoom;
+    }
   }
 
   function syncCameraToActiveState(instant) {
@@ -901,64 +1301,105 @@
       targetCam.x = h.x;
       targetCam.y = h.y;
       targetCam.zoom = h.zoom;
-      if (instant) {
-        baseCam.x = targetCam.x;
-        baseCam.y = targetCam.y;
-        baseCam.zoom = targetCam.zoom;
-        cam.x = baseCam.x;
-        cam.y = baseCam.y;
-        cam.zoom = baseCam.zoom * (1 + 0.05 * introCamRem);
-      }
+      recordDefaultTargetAndApplyInstant(instant, true);
       return;
     }
 
     hasOpenedAnyBranch = true;
     const bCfg = d.branches[activeBranch];
     if (!bCfg) return;
-    const lay = computeBranchLayout(bCfg);
     const isMobile = vw < 680;
     const isCompactTablet = vw >= 680 && vw < 960;
 
+    if (activeBranch === "experience") {
+      const expLay = computeExperienceBoughLayout(bCfg);
+      if (activeItem) {
+        const yn = expLay.yearNodes.find((n) => n.item.id === activeItem);
+        if (yn) {
+          if (isMobile) {
+            const minX = Math.min(yn.cardLeft, yn.boxLeft) - 12;
+            const maxX = Math.max(yn.cardRight, yn.boxRight) + 12;
+            const visibleH = Math.min(yn.detailH + 36, (vh - 130) / 0.72);
+            const minY = Math.min(yn.cardTopY, yn.labelY - 18) - 16;
+            const maxY = minY + Math.max(220, visibleH);
+            fitWorldBox(minX, maxX, minY, maxY, 72);
+          } else {
+            const minX = Math.min(yn.bx - 36, yn.boxLeft, yn.cardLeft) - 22;
+            const maxX = Math.max(yn.bx + 36, yn.boxRight, yn.cardRight) + 22;
+            const minY = Math.min(yn.cardTopY, yn.labelY - 22) - 22;
+            const maxY = Math.max(yn.cardTopY + yn.detailH, yn.labelY + 22) + 22;
+            fitWorldBox(minX, maxX, minY, maxY, 74);
+          }
+          recordDefaultTargetAndApplyInstant(instant, false);
+          return;
+        }
+      }
+
+      // Level 1 experience: upper-right olive crown in bottom-left corner + all 5 year labels unclipped!
+      const crownHintX = isMobile ? 108 : 18;
+      const crownHintY = isMobile ? -392 : -318;
+      const minX = Math.min(crownHintX, expLay.minYearX) - (isMobile ? 8 : 20);
+      const maxX = expLay.maxYearX + (isMobile ? 8 : 24);
+      const minY = expLay.minYearY - (isMobile ? 16 : 26);
+      const maxY = Math.max(crownHintY, expLay.maxYearY) + (isMobile ? 12 : 18);
+      fitWorldBox(minX, maxX, minY, maxY, isMobile ? 72 : 76);
+      recordDefaultTargetAndApplyInstant(instant, false);
+      return;
+    }
+
+    const lay = computeBranchLayout(bCfg);
+
     if (activeBranch === "me") {
       const meLay = computeMeEditorialLayout(bCfg, lay);
+      if (activeItem) {
+        const mp = meLay.measuredProjects.find((p) => p.item.id === activeItem);
+        if (mp) {
+          if (isMobile) {
+            fitWorldBox(
+              mp.lvl2BoxLeft - 12,
+              mp.lvl2BoxRight + 12,
+              mp.lvl2TopY - 18,
+              mp.lvl2TopY + mp.detailH + 20,
+              72
+            );
+          } else {
+            fitWorldBox(
+              meLay.stemX - 18,
+              mp.lvl2BoxRight + 22,
+              Math.min(mp.topY, mp.lvl2TopY) - 26,
+              Math.max(mp.topY + mp.blockH, mp.lvl2TopY + mp.detailH) + 26,
+              74
+            );
+          }
+          recordDefaultTargetAndApplyInstant(instant, false);
+          return;
+        }
+      }
+
       if (isMobile) {
-        fitWorldBox(
-          meLay.minContentX - 6,
-          meLay.maxContentX + 6,
-          meLay.minContentY,
-          meLay.maxContentY,
-          68
-        );
+        const padX = 16;
+        const padTop = 54;
+        const boxW = Math.max(240, meLay.maxContentX - meLay.minContentX + 12);
+        const z = clamp((vw - padX * 2) / boxW, 0.56, 1.08);
+        targetCam.zoom = z;
+        targetCam.x = (meLay.minContentX + meLay.maxContentX) * 0.5;
+        targetCam.y = (meLay.bioTopY - 14) - (padTop - vh * 0.5) / z;
       } else {
-        const groundTargetRatio = isCompactTablet ? 0.78 : 0.77;
-        const groundScreenY = vh * groundTargetRatio;
-        const topPad = 54;
-        const botPad = 56;
-        const sidePad = isCompactTablet ? 24 : 44;
-
-        const minX = isCompactTablet ? Math.min(145, meLay.minContentX) : 75;
-        const maxX = Math.max(900, meLay.maxContentX + 10);
-        const reqAbove = Math.max(468, Math.abs(meLay.minContentY) + 12);
-        const reqBelow = Math.max(155, meLay.maxContentY + 24);
-
-        const zX = (vw - sidePad * 2) / Math.max(280, maxX - minX);
-        const zAbove = (groundScreenY - topPad) / reqAbove;
-        const zBelow = (vh - botPad - groundScreenY) / reqBelow;
-        const z = clamp(Math.min(zX, zAbove, zBelow), 0.38, 1.22);
+        const sidePad = isCompactTablet ? 26 : 48;
+        const topPad = 56;
+        const minX = isCompactTablet ? Math.min(155, meLay.minContentX) : 85;
+        const maxX = Math.max(910, meLay.maxContentX + 12);
+        const zX = (vw - sidePad * 2) / Math.max(320, maxX - minX);
+        const desiredSpanY = Math.max(540, meLay.projectsHeadingY + 130 - (meLay.bioTopY - 24));
+        const zY = (vh - topPad - 64) / desiredSpanY;
+        const z = clamp(Math.min(zX, Math.max(0.76, zY)), 0.58, 1.16);
 
         targetCam.zoom = z;
         targetCam.x = (minX + maxX) * 0.5;
-        targetCam.y = -(groundScreenY - vh * 0.5) / z;
+        targetCam.y = (meLay.bioTopY - 22) - (topPad - vh * 0.5) / z;
       }
 
-      if (instant) {
-        baseCam.x = targetCam.x;
-        baseCam.y = targetCam.y;
-        baseCam.zoom = targetCam.zoom;
-        cam.x = baseCam.x;
-        cam.y = baseCam.y;
-        cam.zoom = baseCam.zoom;
-      }
+      recordDefaultTargetAndApplyInstant(instant, false);
       return;
     }
 
@@ -987,14 +1428,7 @@
           );
           fitWorldBox(minX, maxX, minY, maxY, 74);
         }
-        if (instant) {
-          baseCam.x = targetCam.x;
-          baseCam.y = targetCam.y;
-          baseCam.zoom = targetCam.zoom;
-          cam.x = baseCam.x;
-          cam.y = baseCam.y;
-          cam.zoom = baseCam.zoom;
-        }
+        recordDefaultTargetAndApplyInstant(instant, false);
         return;
       }
     }
@@ -1022,9 +1456,6 @@
       if (activeBranch === "work") {
         canopyAnchorX = -38;
         canopyAnchorY = -288;
-      } else if (activeBranch === "projects") {
-        canopyAnchorX = 38;
-        canopyAnchorY = -275;
       } else {
         canopyAnchorX = 28;
         canopyAnchorY = -125;
@@ -1046,14 +1477,7 @@
     const maxY = Math.min(-34, Math.max(canopyAnchorY, lay.bottomY + 18));
     fitWorldBox(minX, maxX, minY, maxY, isMobile ? 68 : 74);
 
-    if (instant) {
-      baseCam.x = targetCam.x;
-      baseCam.y = targetCam.y;
-      baseCam.zoom = targetCam.zoom;
-      cam.x = baseCam.x;
-      cam.y = baseCam.y;
-      cam.zoom = baseCam.zoom;
-    }
+    recordDefaultTargetAndApplyInstant(instant, false);
   }
 
   // =========================================================================
@@ -2162,10 +2586,10 @@
       { wx: -288, wy: 142, w: 84, h: 54, crack: -0.28, rot: -0.08, seed: 701 },
       { wx: -142, wy: 178, w: 68, h: 44, crack: 0.24, rot: 0.06, seed: 702 },
       { wx: 76, wy: 152, w: 92, h: 58, crack: -0.26, rot: -0.05, seed: 703 },
-      { wx: 256, wy: 148, w: 96, h: 62, crack: -0.29, rot: -0.07, seed: 704 },
-      { wx: 428, wy: 112, w: 74, h: 48, crack: 0.22, rot: 0.09, seed: 705 },
-      { wx: 598, wy: 158, w: 88, h: 56, crack: -0.25, rot: -0.04, seed: 706 },
-      { wx: 774, wy: 124, w: 72, h: 46, crack: 0.27, rot: 0.05, seed: 707 }
+      { wx: 204, wy: 162, w: 86, h: 54, crack: -0.29, rot: -0.07, seed: 704 },
+      { wx: 1140, wy: 132, w: 74, h: 48, crack: 0.22, rot: 0.09, seed: 705 },
+      { wx: 1310, wy: 168, w: 88, h: 56, crack: -0.25, rot: -0.04, seed: 706 },
+      { wx: -446, wy: 156, w: 72, h: 46, crack: 0.27, rot: 0.05, seed: 707 }
     ];
     undergroundBoulders = boulderSpecs.map((spec) => {
       const spr = createRiverBoulderSprite(spec.w, spec.h, spec.crack, spec.seed);
@@ -2174,6 +2598,87 @@
         sprite: spr.canvas,
         drawW: spr.drawW,
         drawH: spr.drawH
+      };
+    });
+
+    // =======================================================================
+    // 8 STIPPLED #C4C8D2 BOTANICAL LEAF-PUFF CLUSTERS FOR EXPERIENCE BOUGH
+    // Exact same soft oval leaf-dab + monochrome risograph stipple grain as initTreeBuffer()!
+    // =======================================================================
+    const expRand = mulberry32(20262021);
+    const softHighlight = "#CACED8";
+    const softShade = "#BEC3CE";
+    expLeafPuffBuffers = EXP_PUFF_SPECS.map((spec, pIdx) => {
+      const pad = 12;
+      const wWorld = spec.rx * 2 + pad * 2;
+      const hWorld = spec.ry * 2 + pad * 2;
+      const pCan = document.createElement("canvas");
+      pCan.width = Math.ceil(wWorld * BUF_SCALE);
+      pCan.height = Math.ceil(hWorld * BUF_SCALE);
+      const pg = pCan.getContext("2d");
+      pg.scale(BUF_SCALE, BUF_SCALE);
+
+      const bx = wWorld * 0.5;
+      const by = hWorld * 0.5;
+      const p1 = expRand() * Math.PI * 2;
+      const p2 = expRand() * Math.PI * 2;
+
+      const subLobes = 5;
+      for (let s = 0; s < subLobes; s++) {
+        const ang = (s / subLobes) * Math.PI * 2 + p1 * 0.35;
+        const offR = 0.26 + expRand() * 0.22;
+        const sx = bx + Math.cos(ang) * spec.rx * offR;
+        const sy = by + Math.sin(ang) * spec.ry * offR * 0.9;
+        pg.fillStyle = CHALK_TREE;
+        drawSoftOvalDab(
+          pg,
+          sx,
+          sy,
+          spec.rx * (0.46 + expRand() * 0.14),
+          spec.ry * (0.46 + expRand() * 0.14),
+          (expRand() - 0.5) * 0.45
+        );
+      }
+
+      for (let i = 0; i < spec.d; i++) {
+        const th = expRand() * Math.PI * 2;
+        const sinT = Math.sin(th);
+        const domeSquash = sinT > 0 ? 0.86 : 0.98;
+        const lobeMod = 1 + 0.14 * Math.sin(th * 4 + p1) + 0.10 * Math.cos(th * 7 + p2);
+        const dist = 0.28 + Math.pow(expRand(), 0.58) * 0.72;
+        const lx = bx + Math.cos(th) * spec.rx * lobeMod * dist;
+        const ly = by + sinT * spec.ry * lobeMod * dist * domeSquash;
+
+        const dabDiam = (spec.rx < 24 ? 2.2 : 2.5) + expRand() * (spec.rx < 24 ? 4.2 : 5.3);
+        const dabRx = dabDiam * 0.5;
+        const dabRy = dabRx * (0.64 + expRand() * 0.24);
+        const tonePick = expRand();
+        pg.fillStyle = tonePick < 0.72 ? CHALK_TREE : tonePick < 0.88 ? softHighlight : softShade;
+        drawSoftOvalDab(pg, lx, ly, dabRx, dabRy, (expRand() - 0.5) * Math.PI);
+      }
+
+      const fleckCount = Math.floor(16 + spec.rx * 0.42);
+      for (let f = 0; f < fleckCount; f++) {
+        const th = expRand() * Math.PI * 2;
+        const sinT = Math.sin(th);
+        const domeSquash = sinT > 0 ? 0.86 : 0.98;
+        const lobeMod = 1 + 0.14 * Math.sin(th * 4 + p1) + 0.10 * Math.cos(th * 7 + p2);
+        const radial = 0.95 + Math.pow(expRand(), 0.74) * 0.22;
+        const fx = bx + Math.cos(th) * spec.rx * lobeMod * radial;
+        const fy = by + sinT * spec.ry * lobeMod * radial * domeSquash;
+        const fleckDiam = 1.9 + expRand() * 2.8;
+        const fRx = fleckDiam * 0.5;
+        const fRy = fRx * (0.68 + expRand() * 0.24);
+        pg.fillStyle = expRand() < 0.78 ? CHALK_TREE : softHighlight;
+        drawSoftOvalDab(pg, fx, fy, fRx, fRy, expRand() * Math.PI);
+      }
+
+      applyLithographGrain(pCan, (37 + pIdx * 29) & 255, (61 + pIdx * 43) & 255, 1.0, 11.0);
+      return {
+        ...spec,
+        canvas: pCan,
+        drawW: wWorld,
+        drawH: hWorld
       };
     });
   }
@@ -2384,58 +2889,91 @@
     const rand = mulberry32(991984);
 
     stars = [];
-    const heroStarSpecs = [
-      { wx: -458, wy: -346, scale: 0.96 },
-      { wx: -334, wy: -366, scale: 0.80 },
-      { wx: -236, wy: -318, scale: 0.72 },
-      { wx: -512, wy: -196, scale: 0.88 },
-      { wx: -388, wy: -116, scale: 0.76 },
-      { wx: 230, wy: -352, scale: 0.86 },
-      { wx: 368, wy: -336, scale: 1.00 },
-      { wx: 496, wy: -274, scale: 0.78 },
-      { wx: 334, wy: -168, scale: 0.84 },
-      { wx: 476, wy: -102, scale: 0.92 }
+    const starRand = mulberry32(19840520);
+
+    // 18 needle-cross sparkle stars (0.62px ray width) spanning main tree, left/right branches, AND upper-right experience bough (all wy < -18)
+    const sparkleStarSpecs = [
+      { wx: -560, wy: -442, scale: 0.90, depth: 0.96 },
+      { wx: -448, wy: -346, scale: 0.96, depth: 1.08 },
+      { wx: -328, wy: -374, scale: 0.80, depth: 0.64 },
+      { wx: -236, wy: -316, scale: 0.72, depth: 0.42 },
+      { wx: -518, wy: -194, scale: 0.88, depth: 0.85 },
+      { wx: -384, wy: -112, scale: 0.76, depth: 0.54 },
+      { wx: -164, wy: -598, scale: 0.84, depth: 0.74 },
+      { wx: 48, wy: -646, scale: 0.82, depth: 0.58 },
+      { wx: 228, wy: -352, scale: 0.86, depth: 0.78 },
+      { wx: 372, wy: -336, scale: 1.00, depth: 1.12 },
+      { wx: 504, wy: -272, scale: 0.78, depth: 0.62 },
+      { wx: 336, wy: -166, scale: 0.84, depth: 0.92 },
+      { wx: 482, wy: -98, scale: 0.92, depth: 1.04 },
+      // Upper-right sky framing the arching experience bough
+      { wx: 214, wy: -692, scale: 0.92, depth: 0.98 },
+      { wx: 396, wy: -818, scale: 0.88, depth: 0.70 },
+      { wx: 574, wy: -626, scale: 0.82, depth: 0.50 },
+      { wx: 698, wy: -862, scale: 0.94, depth: 1.15 },
+      { wx: 764, wy: -684, scale: 0.78, depth: 0.36 }
     ];
 
-    const SPARKLE_TOTAL = 16;
+    const SPARKLE_TOTAL = sparkleStarSpecs.length; // 18
     for (let i = 0; i < SPARKLE_TOTAL; i++) {
-      const isHero = i < heroStarSpecs.length;
-      const period = 4.6 + rand() * 3.8;
+      const sp = sparkleStarSpecs[i];
+      const period = 4.6 + starRand() * 3.8;
       const staggeredPhase =
-        ((i / SPARKLE_TOTAL) * Math.PI * 2 + (rand() - 0.5) * 0.36 + Math.PI * 2) %
+        ((i / SPARKLE_TOTAL) * Math.PI * 2 + (starRand() - 0.5) * 0.34 + Math.PI * 2) %
         (Math.PI * 2);
-      const wx = isHero
-        ? heroStarSpecs[i].wx
-        : (rand() < 0.5 ? -1 : 1) * (210 + rand() * 1180);
-      const wy = isHero
-        ? heroStarSpecs[i].wy
-        : -64 - rand() * 510;
-      const sparkleScale = isHero ? heroStarSpecs[i].scale : 0.28 + rand() * 0.58;
 
       stars.push({
-        wx,
-        wy,
-        r: 0.62 + sparkleScale * 0.34,
-        alpha: 0.30 + rand() * 0.28,
-        speed: 0.48 + rand() * 0.85,
-        phase: rand() * Math.PI * 2,
+        wx: sp.wx,
+        wy: sp.wy, // strictly < -18
+        depth: clamp(sp.depth, 0.22, 1.15),
+        r: 0.82 + sp.scale * 0.36,
+        alpha: 0.34 + starRand() * 0.28,
+        speed: 0.48 + starRand() * 0.85,
+        phase: starRand() * Math.PI * 2,
+        bright: i % 2 === 0,
         glint: true,
-        hero: isHero,
-        sparkleScale,
+        hero: i < 13,
+        sparkleScale: sp.scale,
         glintPeriod: period,
         glintSpeed: (Math.PI * 2) / period,
         glintPhase: staggeredPhase
       });
     }
 
-    for (let i = SPARKLE_TOTAL; i < 216; i++) {
+    // 34 matte lithograph pinpoint stars (0.75px-1.35px, #C6CAD2 / #DCE0E8) distributed across all sky zones (total = 52 stars, all wy < -18)
+    const pinpointStarZones = [
+      // Left sky & work/writing canopy
+      { wx: -740, wy: -520 }, { wx: -655, wy: -288 }, { wx: -612, wy: -128 },
+      { wx: -486, wy: -496 }, { wx: -412, wy: -256 }, { wx: -296, wy: -482 },
+      { wx: -272, wy: -186 }, { wx: -198, wy: -92 },  { wx: -348, wy: -58 },
+      // Central upper sky above olive crown
+      { wx: -112, wy: -562 }, { wx: -28, wy: -584 },  { wx: 86, wy: -556 },
+      { wx: 142, wy: -632 },  { wx: -78, wy: -714 },  { wx: 118, wy: -768 },
+      // Right sky & me editorial zone
+      { wx: 248, wy: -236 },  { wx: 282, wy: -74 },   { wx: 416, wy: -218 },
+      { wx: 438, wy: -446 },  { wx: 562, wy: -386 },  { wx: 588, wy: -152 },
+      { wx: 668, wy: -294 },  { wx: 724, wy: -108 },  { wx: 818, wy: -234 },
+      // Upper-right experience bough sky (-920 .. -490)
+      { wx: 256, wy: -512 },  { wx: 314, wy: -748 },  { wx: 358, wy: -568 },
+      { wx: 468, wy: -644 },  { wx: 518, wy: -876 },  { wx: 618, wy: -736 },
+      { wx: 652, wy: -548 },  { wx: 742, wy: -796 },  { wx: 836, wy: -618 },
+      { wx: 892, wy: -842 }
+    ];
+
+    for (let i = 0; i < pinpointStarZones.length; i++) {
+      const pz = pinpointStarZones[i];
+      const depth = Number((0.22 + ((i * 0.37 + starRand() * 0.18) % 0.93)).toFixed(3));
+      const normD = (depth - 0.22) / (1.15 - 0.22);
+      const radius = Number((0.75 + normD * 0.42 + starRand() * 0.18).toFixed(3)); // 0.75px .. 1.35px
       stars.push({
-        wx: (rand() - 0.5) * 3800,
-        wy: -34 - rand() * 1480,
-        r: 0.45 + rand() * 0.65,
-        alpha: 0.15 + rand() * 0.40,
-        speed: 0.38 + rand() * 1.05,
-        phase: rand() * Math.PI * 2,
+        wx: pz.wx + Math.round((starRand() - 0.5) * 18),
+        wy: Math.min(-28, pz.wy + Math.round((starRand() - 0.5) * 14)), // strictly < -18
+        depth: clamp(depth, 0.22, 1.15),
+        r: clamp(radius, 0.75, 1.35),
+        alpha: 0.28 + normD * 0.26 + starRand() * 0.16,
+        speed: 0.42 + starRand() * 0.95,
+        phase: starRand() * Math.PI * 2,
+        bright: depth > 0.74 || starRand() < 0.35,
         glint: false,
         hero: false,
         sparkleScale: 0,
@@ -2702,14 +3240,25 @@
   }
 
   function drawSkyTextFeather(cxWorld, cyWorld, radius, x, y, w, h) {
-    const clampedBottom = Math.min(y + h, -4);
-    const safeH = clampedBottom - y;
-    if (safeH <= 2) return;
-    const grad = ctx.createRadialGradient(cxWorld, cyWorld, 10, cxWorld, cyWorld, radius);
-    grad.addColorStop(0, "rgba(0, 31, 63, 0.86)");
-    grad.addColorStop(1, "rgba(0, 31, 63, 0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, y, w, safeH);
+    const clampedSkyBottom = Math.min(y + h, -3);
+    const safeSkyH = clampedSkyBottom - y;
+    if (safeSkyH > 2) {
+      const grad = ctx.createRadialGradient(cxWorld, cyWorld, 10, cxWorld, cyWorld, radius);
+      grad.addColorStop(0, "rgba(0, 31, 63, 0.86)");
+      grad.addColorStop(1, "rgba(0, 31, 63, 0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, w, safeSkyH);
+    }
+
+    const clampedSoilTop = Math.max(y, 4);
+    const safeSoilH = y + h - clampedSoilTop;
+    if (safeSoilH > 2) {
+      const sGrad = ctx.createRadialGradient(cxWorld, cyWorld, 10, cxWorld, cyWorld, radius);
+      sGrad.addColorStop(0, "rgba(0, 21, 43, 0.90)");
+      sGrad.addColorStop(1, "rgba(0, 21, 43, 0)");
+      ctx.fillStyle = sGrad;
+      ctx.fillRect(x, clampedSoilTop, w, safeSoilH);
+    }
   }
 
   // =========================================================================
@@ -2953,6 +3502,917 @@
         ctx.restore();
       }
     }
+
+    // Contact links row (mkassab1984@gmail.com & +966 56 332 1033) directly beneath the 3 bio paragraphs
+    if (meLay.contactRows && meLay.contactRows.length > 0 && bioProg > 0.45) {
+      const contactP = clamp((bioProg - 0.45) / 0.55, 0, 1);
+      ctx.save();
+      resetCanvasLetterSpacing();
+      let ccy = meLay.contactTopY;
+      meLay.contactRows.forEach((row, rIdx) => {
+        row.items.forEach((entry) => {
+          const { act, aIdx, tw, offsetX } = entry;
+          const localP = clamp((contactP - aIdx * 0.12) / 0.88, 0, 1);
+          if (localP <= 0.01) return;
+
+          ctx.font = canvasFont("500 12.4px", act.label);
+          const actHitId = `mecontact:${aIdx}`;
+          const actHov = hoveredHit && hoveredHit.id === actHitId;
+          const actRight = bioRight - offsetX;
+          const actLeft = rtl ? actRight - tw : bioLeft + offsetX;
+          const actAnchorX = rtl ? actRight : actLeft;
+          ctx.direction = hasArabicChars(act.label) ? "rtl" : "ltr";
+          ctx.textAlign = rtl ? "right" : "left";
+          ctx.textBaseline = "top";
+
+          const typedAct = drawDiscreteTextLine(
+            act.label,
+            localP,
+            meBioErasing,
+            actAnchorX,
+            ccy,
+            actHov ? CHALK_BRIGHT : CHALK,
+            12.4,
+            1.0,
+            2.0
+          );
+          if (typedAct) {
+            const typedW = ctx.measureText(typedAct).width;
+            drawWavyUnderline(
+              actLeft,
+              ccy + 15.8,
+              tw,
+              clamp(typedW / Math.max(1, tw), 0, 1),
+              aIdx * 3.7 + rIdx * 1.9 + 1.2,
+              actHov ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.88)",
+              actHov ? 1.45 : 1.2,
+              rtl
+            );
+            if (activeBranch === "me" && localP > 0.35) {
+              worldHitboxes.push({
+                id: actHitId,
+                kind: "action",
+                action: act,
+                x: actLeft - 5,
+                y: ccy - 3,
+                w: tw + 10,
+                h: 21
+              });
+            }
+          }
+        });
+        ccy += meLay.contactRowH;
+      });
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // SELECTED PROJECTS SUB-SHOOT & 9 INTERACTIVE WORLD-SPACE NODES INSIDE ME
+    // =========================================================================
+    const headProg = meProjectsHeadingType;
+    const stemX = meLay.stemX + canopySway * 0.2;
+    const headY = meLay.projectsHeadingY;
+    const subShootProg = easeOutCubic(clamp((limbRaw - 0.16) / 0.78, 0, 1));
+
+    if (subShootProg > 0.01 && meLay.measuredProjects.length > 0) {
+      // Delicate sprouting wooden sub-shoot curving down from upper bough to Selected Projects heading
+      drawGrowingShoot(
+        boughEndX - 6,
+        boughEndY + 8,
+        stemX - 24,
+        (boughEndY + headY) * 0.45,
+        stemX - 8,
+        headY - 46,
+        stemX,
+        headY + 10,
+        subShootProg,
+        2.0,
+        1.35,
+        CHALK,
+        5.8
+      );
+
+      // Vertical botanical stem connecting all 9 Selected Projects
+      const lastProj = meLay.measuredProjects[meLay.measuredProjects.length - 1];
+      const stemBottomY = lastProj.jointY;
+      const stemGrowP = easeOutCubic(clamp((limbRaw - 0.28) / 0.72, 0, 1));
+      if (stemGrowP > 0.01) {
+        const curStemEnd = headY + 10 + (stemBottomY - (headY + 10)) * stemGrowP;
+        ctx.save();
+        ctx.strokeStyle = "rgba(198, 202, 210, 0.72)";
+        ctx.lineCap = "round";
+        ctx.lineWidth = 1.35;
+        ctx.beginPath();
+        ctx.moveTo(stemX, headY + 10);
+        ctx.lineTo(stemX, curStemEnd);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    if (headProg > 0.005) {
+      ctx.save();
+      resetCanvasLetterSpacing();
+      ctx.font = canvasFont("600 15.2px", meLay.projectsHeading);
+      ctx.direction = rtl ? "rtl" : "ltr";
+      ctx.textAlign = rtl ? "right" : "left";
+      ctx.textBaseline = "top";
+
+      const pLeft = meLay.projLeft + canopySway * 0.2;
+      const pRight = meLay.projRight + canopySway * 0.2;
+      const hAnchorX = rtl ? pRight : pLeft;
+
+      drawSkyTextFeather(
+        (pLeft + pRight) * 0.5,
+        headY + 10,
+        110,
+        pLeft - 20,
+        headY - 8,
+        meLay.projColW + 40,
+        34
+      );
+
+      // Tiny connector sprig from stemX to heading
+      ctx.strokeStyle = CHALK_BRIGHT;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(stemX, headY + 9);
+      ctx.lineTo(pLeft - 8, headY + 9);
+      ctx.stroke();
+      drawTeardropBud(ctx, stemX + 4, headY + 8.5, 4.4, 2.0, -0.45, CHALK_BRIGHT);
+
+      const typedHead = drawDiscreteTextLine(
+        meLay.projectsHeading,
+        headProg,
+        meProjectsHeadingErasing,
+        hAnchorX,
+        headY,
+        CHALK_BRIGHT,
+        15.2,
+        1.0,
+        2.2
+      );
+      if (typedHead) {
+        const typedW = ctx.measureText(typedHead).width;
+        const uLeft = rtl ? pRight - meLay.projectsHeadingW : pLeft;
+        drawWavyUnderline(
+          uLeft,
+          headY + 18.2,
+          meLay.projectsHeadingW,
+          clamp(typedW / Math.max(1, meLay.projectsHeadingW), 0, 1),
+          9.4,
+          CHALK_BRIGHT,
+          1.35,
+          rtl
+        );
+      }
+      ctx.restore();
+    }
+
+    // Render each of the 9 Selected Projects nodes + Level-2 expanded shoot
+    meLay.measuredProjects.forEach((mp, idx) => {
+      const id = mp.item.id;
+      const stRaw = subTwigGrow[id] || 0;
+      const stProg = easeOutCubic(stRaw);
+      const tProg = itemType[id] || 0;
+      const isItErasing = Boolean(itemErasing[id]);
+      const sumFactor = siblingSumFactor[id] === undefined ? 1 : siblingSumFactor[id];
+
+      const boxL = mp.projLeft + canopySway * 0.2;
+      const boxR = mp.projRight + canopySway * 0.2;
+      const nodeY = mp.jointY;
+
+      if (stProg > 0.01) {
+        drawGrowingShoot(
+          stemX,
+          nodeY - 4,
+          stemX + 7,
+          nodeY - 1,
+          boxL - 14,
+          nodeY,
+          boxL - 6,
+          nodeY,
+          stProg,
+          1.55,
+          1.05,
+          CHALK,
+          idx * 2.9 + 4.2
+        );
+      }
+
+      if (tProg > 0.004) {
+        const itemHitId = "item:" + id;
+        const isItemHov = hoveredHit && hoveredHit.id === itemHitId;
+        const isItemOpen = activeItem === id;
+        hoverAmt[itemHitId] =
+          (hoverAmt[itemHitId] || 0) +
+          ((isItemHov || isItemOpen ? 1 : 0) - (hoverAmt[itemHitId] || 0)) * 0.24;
+        const ihp = hoverAmt[itemHitId];
+
+        const siblingDim =
+          activeBranch === "me" && activeItem && activeItem !== id ? 0.52 : 1.0;
+
+        const textX = rtl ? boxR : boxL;
+        const align = rtl ? "right" : "left";
+
+        ctx.save();
+        ctx.globalAlpha = siblingDim;
+        ctx.direction = rtl ? "rtl" : "ltr";
+        ctx.textAlign = align;
+        ctx.textBaseline = "top";
+
+        drawSkyTextFeather(
+          (boxL + boxR) * 0.5,
+          mp.topY + mp.blockH * 0.5,
+          Math.max(96, mp.blockH * 0.95) * clamp(tProg * 1.3, 0.25, 1),
+          boxL - 22,
+          mp.topY - 10,
+          mp.projColW + 44,
+          mp.blockH + 20
+        );
+
+        let cy = mp.topY;
+        if (mp.item.meta) {
+          const metaP = clamp(tProg * 1.45, 0, 1);
+          if (metaP > 0.005) {
+            resetCanvasLetterSpacing();
+            const mSize = lang === "ar" || hasArabicChars(mp.item.meta) ? 11 : 10.3;
+            ctx.font = `500 ${mSize}px ${fontFamilyFor(mp.item.meta)}`;
+            drawDiscreteTextLine(
+              mp.item.meta,
+              metaP,
+              isItErasing,
+              textX,
+              cy,
+              CHALK_MUTED,
+              mSize,
+              1.0,
+              2.2
+            );
+          }
+          cy += 14;
+        }
+
+        ctx.font = canvasFont("600 13.6px", mp.item.title);
+        const titleCol = isItemHov || isItemOpen ? CHALK_BRIGHT : CHALK;
+        const titleP = clamp((tProg - 0.05) / 0.50, 0, 1);
+        const dispTitleLines = mp.titleLines.map((fullLine, lIdx) => {
+          if (lIdx === mp.titleLines.length - 1 && mp.bodyParas.length) {
+            const sym = isItemOpen ? "−" : "+";
+            return fullLine + (rtl ? `\u200F  ${sym}` : `  ${sym}`);
+          }
+          return fullLine;
+        });
+        const titleCounts = computeLinesCharSchedule(dispTitleLines, titleP, isItErasing, 2.2);
+
+        dispTitleLines.forEach((dispLine, lIdx) => {
+          const fullLine = mp.titleLines[lIdx];
+          const take = titleCounts[lIdx] || 0;
+          if (take > 0) {
+            const drawnPart = dispLine.slice(0, take);
+            drawChalkText(drawnPart, textX, cy, titleCol, 13.6, 1.0);
+            if (mp.bodyParas.length > 0 && ihp > 0.03 && drawnPart) {
+              const corePart = drawnPart.slice(0, Math.min(drawnPart.length, fullLine.length));
+              const lw = ctx.measureText(corePart).width;
+              const uLeft = rtl ? textX - lw : textX;
+              drawWavyUnderline(
+                uLeft,
+                cy + 15.2,
+                lw,
+                ihp,
+                idx * 4.3 + lIdx * 1.9,
+                CHALK_BRIGHT,
+                1.1,
+                rtl
+              );
+            }
+          }
+          cy += 17.6;
+        });
+
+        cy += 3;
+        ctx.font = canvasFont("400 12.3px", mp.item.summary);
+        const sumProg = clamp(((tProg - 0.26) / 0.64) * sumFactor, 0, 1);
+        cy = drawDiscreteWrappedLines(
+          mp.sumLines,
+          sumProg,
+          isItErasing,
+          textX,
+          cy,
+          15.8,
+          CHALK,
+          12.3,
+          1.0
+        );
+
+        if (activeBranch === "me") {
+          const stl = worldToScreen(boxL, mp.topY);
+          const sbr = worldToScreen(boxR, cy);
+          lastMeProjectsScreenBoxes.push({
+            id,
+            title: mp.item.title,
+            screenLeft: stl.x,
+            screenRight: sbr.x,
+            screenTop: stl.y,
+            screenBottom: sbr.y
+          });
+        }
+
+        if (mp.bodyParas.length > 0 && activeBranch === "me" && tProg > 0.22) {
+          worldHitboxes.push({
+            id: itemHitId,
+            kind: "item",
+            branchKey: "me",
+            itemId: id,
+            x: boxL - 6,
+            y: mp.topY - 4,
+            w: mp.projColW + 12,
+            h: cy - mp.topY + 6
+          });
+        }
+
+        ctx.restore();
+      }
+
+      // Level-2 Expanded Project Shoot & Details inside me
+      const s2Raw = lvl2ShootGrow[id] || 0;
+      const dTypeProg = lvl2Type[id] || 0;
+      const isD2Erasing = Boolean(lvl2Erasing[id]);
+      if (s2Raw > 0.005 || dTypeProg > 0.005) {
+        const itProg = easeOutCubic(s2Raw);
+        const s2X = mp.lvl2StartX + canopySway * 0.2;
+        const s2Y = nodeY;
+        const e2X = mp.lvl2TipX + canopySway * 0.15;
+        const e2Y = mp.lvl2TopY + 18;
+
+        const endShoot = drawGrowingShoot(
+          s2X,
+          s2Y,
+          s2X + 24,
+          s2Y + (e2Y - s2Y) * 0.32,
+          e2X - 24,
+          e2Y,
+          e2X,
+          e2Y,
+          itProg,
+          1.75,
+          1.15,
+          CHALK_BRIGHT,
+          idx * 5.1 + 9
+        );
+
+        if (tuftBuffer && itProg > 0.42) {
+          const ts2 = smoothstep(0.42, 1.0, itProg) * 26;
+          ctx.save();
+          ctx.globalAlpha = smoothstep(0.42, 1.0, itProg) * 0.88;
+          ctx.drawImage(
+            tuftBuffer,
+            endShoot.endX - ts2 * 0.5,
+            endShoot.endY - ts2 * 0.5,
+            ts2,
+            ts2
+          );
+          ctx.restore();
+        }
+
+        if (dTypeProg > 0.004) {
+          const d = getLocale();
+          const dBoxL = mp.lvl2BoxLeft + canopySway * 0.15;
+          const dBoxR = mp.lvl2BoxRight + canopySway * 0.15;
+          const dTextX = rtl ? dBoxR : dBoxL;
+          const align = rtl ? "right" : "left";
+
+          ctx.save();
+          ctx.globalAlpha = 1.0;
+          ctx.direction = rtl ? "rtl" : "ltr";
+          ctx.textAlign = align;
+          ctx.textBaseline = "top";
+
+          drawSkyTextFeather(
+            (dBoxL + dBoxR) * 0.5,
+            mp.lvl2TopY + mp.detailH * 0.5,
+            Math.max(112, mp.detailH * 0.9) * clamp(dTypeProg * 1.3, 0.25, 1),
+            dBoxL - 26,
+            mp.lvl2TopY - 16,
+            mp.projDetailW + 52,
+            mp.detailH + 32
+          );
+
+          let dcy = mp.lvl2TopY;
+          const closeId = "closeitem:" + id;
+          const closeHov = hoveredHit && hoveredHit.id === closeId;
+          const colP = clamp(dTypeProg * 2.1, 0, 1);
+          if (colP > 0.01) {
+            resetCanvasLetterSpacing();
+            const colSize = lang === "ar" || hasArabicChars(d.collapseNote) ? 11.5 : 11;
+            ctx.font = `500 ${colSize}px ${fontFamilyFor(d.collapseNote)}`;
+            const fullCollapseW = Math.max(1, ctx.measureText(d.collapseNote).width);
+            const typedCollapse = drawDiscreteTextLine(
+              d.collapseNote,
+              colP,
+              isD2Erasing,
+              dTextX,
+              dcy,
+              closeHov ? CHALK_BRIGHT : CHALK_MUTED,
+              colSize,
+              1.0,
+              1.8
+            );
+            if (typedCollapse) {
+              const cw = ctx.measureText(typedCollapse).width;
+              const uLeft = rtl ? dTextX - fullCollapseW : dTextX;
+              drawWavyUnderline(
+                uLeft,
+                dcy + 14,
+                fullCollapseW,
+                clamp((cw / fullCollapseW) * (closeHov ? 1.0 : 0.72), 0, 1),
+                idx * 2.3 + 4.1,
+                closeHov ? CHALK_BRIGHT : "rgba(154, 162, 178, 0.68)",
+                1.0,
+                rtl
+              );
+              if (activeItem === id) {
+                worldHitboxes.push({
+                  id: closeId,
+                  kind: "item",
+                  branchKey: "me",
+                  itemId: id,
+                  x: uLeft - 6,
+                  y: dcy - 4,
+                  w: fullCollapseW + 12,
+                  h: 20
+                });
+              }
+            }
+          }
+          dcy += 22;
+
+          const allLines = [];
+          mp.bodyParas.forEach((pLines, pIdx) => {
+            pLines.forEach((line, lIdx) => {
+              allLines.push({
+                text: line,
+                kind: "body",
+                afterGap: lIdx === pLines.length - 1 ? 9 : 0
+              });
+            });
+          });
+          mp.tagLines.forEach((tl) => {
+            allLines.push({ text: tl, kind: "tag", afterGap: 0 });
+          });
+
+          const bodyRawP = clamp((dTypeProg - 0.05) / 0.95, 0, 1);
+          const detailCounts = computeLinesCharSchedule(
+            allLines.map((ln) => ln.text),
+            bodyRawP,
+            isD2Erasing,
+            3.0
+          );
+
+          allLines.forEach((ln, lIdx) => {
+            const take = detailCounts[lIdx] || 0;
+            if (take > 0) {
+              const sub = ln.text.slice(0, take);
+              if (ln.kind === "body") {
+                ctx.font = canvasFont("400 13px", ln.text);
+                drawChalkText(sub, dTextX, dcy, CHALK, 13, 1.0);
+              } else {
+                resetCanvasLetterSpacing();
+                const tgSize = lang === "ar" || hasArabicChars(ln.text) ? 11.5 : 11;
+                ctx.font = `400 ${tgSize}px ${fontFamilyFor(ln.text)}`;
+                drawChalkText(sub, dTextX, dcy, CHALK_MUTED, tgSize, 1.0);
+              }
+            }
+            dcy += (ln.kind === "body" ? 18.8 : 15.5) + ln.afterGap;
+          });
+
+          ctx.restore();
+        }
+      }
+    });
+  }
+
+  // =========================================================================
+  // EXPERIENCE ARCHING LEAFY YEAR-BOUGH RENDERER (2D03B4ED ARCHITECTURE)
+  // =========================================================================
+  function renderExperienceArchingBough(bCfg, timeSec) {
+    const rtl = isRTL();
+    const d = getLocale();
+    if (expBoughGrow <= 0.004) return;
+
+    const expLay = computeExperienceBoughLayout(bCfg);
+    const G = expLay.geom;
+    const baseSway = computeCanopySway(G.y0, timeSec);
+
+    function boughPointAt(u) {
+      const swayMul = 1 + u * 0.55;
+      const wx = evalCubic(G.x0, G.cx1, G.cx2, G.x3, u) + baseSway * swayMul;
+      const wy =
+        evalCubic(G.y0, G.cy1, G.cy2, G.y3, u) +
+        Math.sin(timeSec * 0.76 + u * 2.4) * (1.2 * u);
+      return { x: wx, y: wy };
+    }
+
+    function drawPuffCluster(puff, pIdx) {
+      if (expBoughGrow <= puff.t - 0.03) return;
+      const bloom = easeOutCubic(clamp((expBoughGrow - (puff.t - 0.03)) / 0.17, 0, 1));
+      if (bloom <= 0.01 || !puff.canvas) return;
+
+      const pt = boughPointAt(puff.t);
+      const dx = evalCubicDeriv(G.x0, G.cx1, G.cx2, G.x3, puff.t);
+      const dy = evalCubicDeriv(G.y0, G.cy1, G.cy2, G.y3, puff.t);
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      const cx = pt.x + nx * puff.nOff;
+      const cy = pt.y + ny * puff.nOff;
+      const sc = 0.56 + 0.44 * bloom;
+      const dw = puff.drawW * sc;
+      const dh = puff.drawH * sc;
+
+      ctx.save();
+      ctx.globalAlpha = bloom;
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.sin(pIdx * 1.7) * 0.08);
+      ctx.drawImage(puff.canvas, -dw * 0.5, -dh * 0.5, dw, dh);
+      ctx.restore();
+    }
+
+    // 1. Background leaf-puff clusters behind the silver wooden bough
+    expLeafPuffBuffers.forEach((puff, pIdx) => {
+      if (!puff.fg) drawPuffCluster(puff, pIdx);
+    });
+
+    // 2. Gracefully arching ~650px silver wooden bough (tapering 4.6px -> 1.4px)
+    const boughSteps = 44;
+    ctx.save();
+    ctx.strokeStyle = CHALK_TREE;
+    ctx.fillStyle = CHALK_TREE;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    let prevPt = boughPointAt(0);
+    for (let i = 1; i <= boughSteps; i++) {
+      const u = (i / boughSteps) * expBoughGrow;
+      const nextPt = boughPointAt(u);
+      const gnarl = 1 + 0.05 * Math.sin(u * 19.0 + 1.3);
+      ctx.lineWidth = (4.6 + (1.4 - 4.6) * u) * gnarl;
+      ctx.beginPath();
+      ctx.moveTo(prevPt.x, prevPt.y);
+      ctx.lineTo(nextPt.x, nextPt.y);
+      ctx.stroke();
+      prevPt = nextPt;
+    }
+
+    // Slender outer forked tip + tiny detached botanical leaf-flecks (matching 2D03B4ED!)
+    if (expBoughGrow > 0.92) {
+      const tipP = smoothstep(0.92, 1.0, expBoughGrow);
+      const forkBase = boughPointAt(0.955);
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(forkBase.x, forkBase.y);
+      ctx.lineTo(forkBase.x + 13 * tipP, forkBase.y - 10 * tipP);
+      ctx.stroke();
+      drawTeardropBud(ctx, prevPt.x + 3.5 * tipP, prevPt.y + 4.5 * tipP, 4.2 * tipP, 2.0 * tipP, 0.9, CHALK_TREE);
+      drawSoftOvalDab(ctx, prevPt.x + 7.5 * tipP, prevPt.y + 2.0 * tipP, 1.4 * tipP, 1.0 * tipP, 0.4);
+    }
+    ctx.restore();
+
+    // 3. Foreground leaf-puff clusters blooming organically along the bough
+    expLeafPuffBuffers.forEach((puff, pIdx) => {
+      if (puff.fg) drawPuffCluster(puff, pIdx);
+    });
+
+    // 4. 5 Alternating Year Twigs + Typewriter Year Labels + Level-2 Secondary Role Shoots
+    expLay.yearNodes.forEach((yn, idx) => {
+      const id = yn.item.id;
+      const stRaw = subTwigGrow[id] || 0;
+      const stProg = easeOutCubic(stRaw);
+      const tProg = itemType[id] || 0;
+      const isItErasing = Boolean(itemErasing[id]);
+
+      const swayX = baseSway * (1 + yn.t * 0.55);
+      const swayY = Math.sin(timeSec * 0.76 + yn.t * 2.4) * (1.2 * yn.t);
+      const sx0 = yn.startX + swayX;
+      const sy0 = yn.startY + swayY;
+      const sx3 = yn.tipX + swayX;
+      const sy3 = yn.tipY + swayY;
+
+      // Short slender side-twig (36-42px) with 3 tiny teardrop leaf buds
+      if (stProg > 0.01) {
+        const midX1 = sx0 + (sx3 - sx0) * 0.35;
+        const midY1 = sy0 + (sy3 - sy0) * 0.35 - 2.2;
+        const midX2 = sx0 + (sx3 - sx0) * 0.72;
+        const midY2 = sy0 + (sy3 - sy0) * 0.72 - 1.0;
+        drawGrowingShoot(
+          sx0,
+          sy0,
+          midX1,
+          midY1,
+          midX2,
+          midY2,
+          sx3,
+          sy3,
+          stProg,
+          1.75,
+          1.05,
+          activeItem === id ? CHALK_BRIGHT : CHALK,
+          idx * 3.3 + 1.8
+        );
+      }
+
+      if (tProg > 0.005) {
+        const hitId = "item:" + id;
+        const isHov = hoveredHit && hoveredHit.id === hitId;
+        const isOpen = activeItem === id;
+        hoverAmt[hitId] =
+          (hoverAmt[hitId] || 0) + ((isHov || isOpen ? 1 : 0) - (hoverAmt[hitId] || 0)) * 0.24;
+        const hp = hoverAmt[hitId];
+
+        const dispText = isOpen ? yn.activeText : yn.rawLabel;
+        const visCount = computeDiscreteCharCount(dispText, tProg, isItErasing, 2.0);
+        if (visCount > 0) {
+          const siblingDim = activeItem && !isOpen ? 0.58 : 1.0;
+          ctx.save();
+          ctx.globalAlpha = siblingDim;
+          resetCanvasLetterSpacing();
+          ctx.font = canvasFont(`${isOpen || hp > 0.15 ? 600 : 500} 14.8px`, dispText);
+          ctx.direction = rtl ? "rtl" : "ltr";
+          ctx.textBaseline = "middle";
+
+          const measuredFullW = ctx.measureText(dispText).width;
+          const bLeft = yn.isRightSide ? sx3 + 10 : sx3 - 10 - measuredFullW;
+          const bRight = bLeft + measuredFullW;
+          const ly = yn.labelY + swayY;
+
+          drawSkyTextFeather(
+            (bLeft + bRight) * 0.5,
+            ly,
+            Math.max(46, measuredFullW * 0.85),
+            bLeft - 14,
+            ly - 14,
+            measuredFullW + 28,
+            28
+          );
+
+          const alignRight = rtl ? true : !yn.isRightSide;
+          ctx.textAlign = alignRight ? "right" : "left";
+          const anchorX = alignRight ? bRight : bLeft;
+          const subStr = dispText.slice(0, visCount);
+
+          drawChalkText(
+            subStr,
+            anchorX,
+            ly,
+            isOpen || hp > 0.15 ? CHALK_BRIGHT : CHALK,
+            14.8,
+            1.0
+          );
+
+          const uWave = isOpen ? 1.0 : hp * 0.92;
+          if (uWave > 0.02) {
+            drawWavyUnderline(
+              bLeft,
+              ly + 10.5,
+              measuredFullW,
+              uWave * clamp(tProg * 1.2, 0, 1),
+              idx * 4.7 + 2.3,
+              isOpen ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.86)",
+              isOpen ? 1.35 : 1.1,
+              rtl
+            );
+          }
+          ctx.restore();
+
+          if (activeBranch === "experience") {
+            const scrTL = worldToScreen(bLeft, ly - 10);
+            const scrBR = worldToScreen(bRight, ly + 11);
+            lastExpYearScreenBoxes.push({
+              id,
+              yearLabel: dispText,
+              screenLeft: scrTL.x,
+              screenRight: scrBR.x,
+              screenTop: scrTL.y,
+              screenBottom: scrBR.y
+            });
+
+            if (tProg > 0.25) {
+              worldHitboxes.push({
+                id: hitId,
+                kind: "item",
+                branchKey: "experience",
+                itemId: id,
+                x: Math.min(sx0, bLeft) - 8,
+                y: Math.min(sy0, ly) - 15,
+                w: Math.max(sx3, bRight) - Math.min(sx0, bLeft) + 16,
+                h: Math.abs(sy3 - sy0) + 30
+              });
+            }
+          }
+        }
+      }
+
+      // Level-2 Secondary Wooden Shoot & Typewriter Role/Bullet Card
+      const s2Raw = lvl2ShootGrow[id] || 0;
+      const dTypeProg = lvl2Type[id] || 0;
+      const isD2Erasing = Boolean(lvl2Erasing[id]);
+      if (s2Raw > 0.005 || dTypeProg > 0.005) {
+        const itProg = easeOutCubic(s2Raw);
+        const s2X = yn.s2StartX + swayX;
+        const s2Y = yn.s2StartY + swayY;
+        const e2X = yn.s2TipX + swayX * 0.65;
+        const e2Y = yn.cardTopY + 18;
+
+        const endShoot = drawGrowingShoot(
+          s2X,
+          s2Y,
+          s2X + yn.shootDir * 24,
+          s2Y + (e2Y - s2Y) * 0.35,
+          e2X - yn.shootDir * 24,
+          e2Y,
+          e2X,
+          e2Y,
+          itProg,
+          1.8,
+          1.15,
+          CHALK_BRIGHT,
+          idx * 5.3 + 7.1
+        );
+
+        if (tuftBuffer && itProg > 0.42) {
+          const ts2 = smoothstep(0.42, 1.0, itProg) * 26;
+          ctx.save();
+          ctx.globalAlpha = smoothstep(0.42, 1.0, itProg) * 0.88;
+          ctx.drawImage(
+            tuftBuffer,
+            endShoot.endX - ts2 * 0.5,
+            endShoot.endY - ts2 * 0.5,
+            ts2,
+            ts2
+          );
+          ctx.restore();
+        }
+
+        if (dTypeProg > 0.004) {
+          const cLeft = yn.cardLeft + swayX * 0.65;
+          const cRight = yn.cardRight + swayX * 0.65;
+          const cTextX = rtl ? cRight : cLeft;
+
+          ctx.save();
+          resetCanvasLetterSpacing();
+          ctx.direction = rtl ? "rtl" : "ltr";
+          ctx.textAlign = rtl ? "right" : "left";
+          ctx.textBaseline = "top";
+
+          drawSkyTextFeather(
+            (cLeft + cRight) * 0.5,
+            yn.cardTopY + yn.detailH * 0.5,
+            Math.max(125, yn.detailH * 0.88) * clamp(dTypeProg * 1.3, 0.25, 1),
+            cLeft - 26,
+            yn.cardTopY - 18,
+            yn.detailColWidth + 52,
+            yn.detailH + 36
+          );
+
+          let dcy = yn.cardTopY;
+          const closeId = "closeitem:" + id;
+          const closeHov = hoveredHit && hoveredHit.id === closeId;
+          const colP = clamp(dTypeProg * 2.2, 0, 1);
+          if (colP > 0.01) {
+            const colSize = lang === "ar" || hasArabicChars(d.collapseNote) ? 11.5 : 11;
+            ctx.font = `500 ${colSize}px ${fontFamilyFor(d.collapseNote)}`;
+            const fullCollapseW = Math.max(1, ctx.measureText(d.collapseNote).width);
+            const typedCollapse = drawDiscreteTextLine(
+              d.collapseNote,
+              colP,
+              isD2Erasing,
+              cTextX,
+              dcy,
+              closeHov ? CHALK_BRIGHT : CHALK_MUTED,
+              colSize,
+              1.0,
+              1.8
+            );
+            if (typedCollapse) {
+              const cw = ctx.measureText(typedCollapse).width;
+              const uLeft = rtl ? cTextX - fullCollapseW : cTextX;
+              drawWavyUnderline(
+                uLeft,
+                dcy + 14,
+                fullCollapseW,
+                clamp((cw / fullCollapseW) * (closeHov ? 1.0 : 0.72), 0, 1),
+                idx * 2.7 + 3.9,
+                closeHov ? CHALK_BRIGHT : "rgba(154, 162, 178, 0.68)",
+                1.0,
+                rtl
+              );
+              if (activeItem === id) {
+                worldHitboxes.push({
+                  id: closeId,
+                  kind: "item",
+                  branchKey: "experience",
+                  itemId: id,
+                  x: uLeft - 6,
+                  y: dcy - 4,
+                  w: fullCollapseW + 12,
+                  h: 20
+                });
+              }
+            }
+          }
+          dcy += 24;
+
+          // Build flat line schedule across all roles & bullets in this year node
+          const flatRoleLines = [];
+          yn.measuredRoles.forEach((mr, rIdx) => {
+            mr.metaLines.forEach((ml, mIdx) => {
+              flatRoleLines.push({
+                text: ml,
+                kind: "meta",
+                indent: 0,
+                stepY: 15.5 + (mIdx === mr.metaLines.length - 1 ? 2 : 0)
+              });
+            });
+            mr.roleLines.forEach((rl, rlIdx) => {
+              flatRoleLines.push({
+                text: rl,
+                kind: "role",
+                indent: 0,
+                isLastRoleLine: rlIdx === mr.roleLines.length - 1,
+                roleIdx: rIdx,
+                stepY: 18.2 + (rlIdx === mr.roleLines.length - 1 ? 5 : 0)
+              });
+            });
+            mr.bulletLines.forEach((bl, bIdx) => {
+              const isLastOfRole = bIdx === mr.bulletLines.length - 1;
+              const roleSep = isLastOfRole && rIdx < yn.measuredRoles.length - 1 ? 14 : 0;
+              flatRoleLines.push({
+                text: bl.text,
+                kind: "bullet",
+                indent: bl.indent || 0,
+                hasDividerAfter: roleSep > 0,
+                stepY: 16.8 + bl.afterGap + roleSep
+              });
+            });
+          });
+
+          const bodyRawP = clamp((dTypeProg - 0.05) / 0.95, 0, 1);
+          const counts = computeLinesCharSchedule(
+            flatRoleLines.map((fl) => fl.text),
+            bodyRawP,
+            isD2Erasing,
+            2.6
+          );
+
+          flatRoleLines.forEach((fl, fIdx) => {
+            const take = counts[fIdx] || 0;
+            if (take > 0) {
+              const sub = fl.text.slice(0, take);
+              const xDraw = rtl ? cTextX - fl.indent : cTextX + fl.indent;
+              if (fl.kind === "meta") {
+                resetCanvasLetterSpacing();
+                const ms = lang === "ar" || hasArabicChars(fl.text) ? 11.4 : 10.8;
+                ctx.font = `500 ${ms}px ${fontFamilyFor(fl.text)}`;
+                drawChalkText(sub, xDraw, dcy, CHALK_MUTED, ms, 1.0);
+              } else if (fl.kind === "role") {
+                ctx.font = canvasFont("600 13.8px", fl.text);
+                drawChalkText(sub, xDraw, dcy, CHALK_BRIGHT, 13.8, 1.0);
+                if (fl.isLastRoleLine) {
+                  const fullRoleW = Math.max(1, ctx.measureText(fl.text).width);
+                  const subW = ctx.measureText(sub).width;
+                  const uL = rtl ? xDraw - fullRoleW : xDraw;
+                  drawWavyUnderline(
+                    uL,
+                    dcy + 15.8,
+                    fullRoleW,
+                    clamp(subW / fullRoleW, 0, 1) * 0.78,
+                    idx * 3.1 + fl.roleIdx * 2.2,
+                    "rgba(220, 224, 232, 0.72)",
+                    1.0,
+                    rtl
+                  );
+                }
+              } else {
+                ctx.font = canvasFont("400 12.6px", fl.text);
+                drawChalkText(sub, xDraw, dcy, CHALK, 12.6, 1.0);
+              }
+
+              if (fl.hasDividerAfter && take >= fl.text.length) {
+                const divY = dcy + 22;
+                ctx.fillStyle = "rgba(198, 202, 210, 0.55)";
+                ctx.beginPath();
+                ctx.arc(rtl ? cRight - 6 : cLeft + 6, divY, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+            dcy += fl.stepY;
+          });
+
+          ctx.restore();
+        }
+      }
+    });
   }
 
   function renderMenuAndGrownBranches(timeSec) {
@@ -2989,10 +4449,13 @@
 
       if (key === "me") {
         renderMeEditorialAndPortrait(bCfg, lay, tipX, tipY, canopySway);
+      } else if (key === "experience") {
+        renderExperienceArchingBough(bCfg, timeSec);
       }
 
-      let anyChildVisible = key !== "me" && limbRaw > 0.005;
-      if (!anyChildVisible && key !== "me") {
+      const isCustomBranch = key === "me" || key === "experience";
+      let anyChildVisible = !isCustomBranch && limbRaw > 0.005;
+      if (!anyChildVisible && !isCustomBranch) {
         for (const mi of lay.measuredItems) {
           if ((itemType[mi.item.id] || 0) > 0.005 || (subTwigGrow[mi.item.id] || 0) > 0.005) {
             anyChildVisible = true;
@@ -3466,10 +4929,15 @@
             ctx.direction = rtl ? "rtl" : "ltr";
 
             const fullW = ctx.measureText(baseText).width;
-            const labelLiftY = tipY - limbProg * 17;
+            const isExpKey = key === "experience";
+            const labelLiftY = isExpKey ? tipY + limbProg * 6 : tipY - limbProg * 17;
             const homeAnchorX = curTipX + dir * 12;
             const openCenterX = tipX + dir * (lay.boughSpan * 0.46);
-            const openAnchorX = dir < 0 ? openCenterX + fullW * 0.5 : openCenterX - fullW * 0.5;
+            const openAnchorX = isExpKey
+              ? tipX + 12
+              : dir < 0
+                ? openCenterX + fullW * 0.5
+                : openCenterX - fullW * 0.5;
             const labelAnchorX = homeAnchorX + (openAnchorX - homeAnchorX) * limbProg;
             const lineLeft = dir < 0 ? labelAnchorX - fullW : labelAnchorX;
             const lineRight = lineLeft + fullW;
@@ -3961,6 +5429,11 @@
     cam.y = baseCam.y;
     cam.zoom = baseCam.zoom * (1 + 0.05 * introCamRem);
 
+    // Silky exponential spring smoothing for 3D depth starfield mouse parallax
+    const starEase = 1 - Math.exp(-6.0 * dt);
+    starMouse.x += (starMouseTarget.x - starMouse.x) * starEase;
+    starMouse.y += (starMouseTarget.y - starMouse.y) * starEase;
+
     // 3. Boot identity whisper types in crisply char-by-char (0.2s - 1.0s), erases backwards (~16ms/char)
     if (!activeBranch && !hasOpenedAnyBranch && introElapsed <= 1.05) {
       identityErasing = false;
@@ -4041,8 +5514,19 @@
         const bioGoal = isSelected && branchLimbGrow.me > 0.34 ? 1 : 0;
         meBioErasing = meBioType > bioGoal;
         meBioType = approach(meBioType, bioGoal, 1 / 0.96, 1 / 0.26, dt);
-        const meLimbGoal = isSelected || meBioType > 0.22 ? 1 : 0;
+
+        const headGoal = isSelected && branchLimbGrow.me > 0.42 ? 1 : 0;
+        meProjectsHeadingErasing = meProjectsHeadingType > headGoal;
+        meProjectsHeadingType = approach(meProjectsHeadingType, headGoal, 1 / 0.55, 1 / 0.22, dt);
+
+        const meLimbGoal = isSelected || meBioType > 0.22 || maxChildItemType > 0.35 ? 1 : 0;
         branchLimbGrow.me = approach(branchLimbGrow.me, meLimbGoal, 2.4, 3.2, dt);
+      } else if (k === "experience") {
+        // ~0.92s progressive physical growth (expBoughGrow = easeOutCubic(expBoughRaw))
+        const expGoal = isSelected ? 1 : maxChildItemType > 0.45 ? 1 : 0;
+        expBoughRaw = approach(expBoughRaw, expGoal, 1 / 0.92, 1 / 0.34, dt);
+        expBoughGrow = easeOutCubic(expBoughRaw);
+        branchLimbGrow.experience = expBoughGrow;
       } else {
         const limbGoal = isSelected ? 1 : maxChildItemType > 0.58 ? 1 : 0;
         branchLimbGrow[k] = approach(branchLimbGrow[k], limbGoal, 2.4, 3.2, dt);
@@ -4059,22 +5543,37 @@
         const isItemSelected = isSelected && activeItem === id;
 
         if (isItemSelected) {
-          lvl2ShootGrow[id] = approach(curS2, 1, 2.5, 3.3, dt);
-          const t2Goal = lvl2ShootGrow[id] > 0.58 ? 1 : 0;
+          lvl2ShootGrow[id] = approach(curS2, 1, 2.6, 3.4, dt);
+          const t2Goal = lvl2ShootGrow[id] > 0.55 ? 1 : 0;
           lvl2Erasing[id] = curT2 > t2Goal;
-          lvl2Type[id] = approach(curT2, t2Goal, 1 / 0.92, 1 / 0.25, dt);
+          lvl2Type[id] = approach(curT2, t2Goal, 1 / 0.92, 1 / 0.24, dt);
         } else {
           lvl2Erasing[id] = curT2 > 0;
-          lvl2Type[id] = approach(curT2, 0, 1 / 0.92, 1 / 0.25, dt);
+          lvl2Type[id] = approach(curT2, 0, 1 / 0.92, 1 / 0.24, dt);
           const s2Goal = lvl2Type[id] > 0.62 ? 1 : 0;
-          lvl2ShootGrow[id] = approach(curS2, s2Goal, 2.5, 3.4, dt);
+          lvl2ShootGrow[id] = approach(curS2, s2Goal, 2.6, 3.5, dt);
         }
 
-        const sumGoal = isSelected && activeItem && activeItem !== id ? 0.24 : 1.0;
+        const sumGoal = isSelected && activeItem && activeItem !== id ? 0.28 : 1.0;
         siblingSumFactor[id] = approach(curSumF, sumGoal, 2.6, 3.2, dt);
 
-        if (isSelected) {
-          const canSprout = branchLimbGrow[k] > 0.22 + idx * 0.08;
+        if (k === "experience") {
+          const nodeT = typeof it.t === "number" ? it.t : 0.20 + idx * 0.18;
+          if (isSelected) {
+            const canSprout = expBoughGrow >= nodeT - 0.02;
+            subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 3.2, 3.6, dt);
+            const yrGoal = subTwigGrow[id] > 0.55 ? 1 : 0;
+            itemErasing[id] = curType > yrGoal;
+            itemType[id] = approach(curType, yrGoal, 1 / 0.36, 1 / 0.18, dt);
+          } else {
+            itemErasing[id] = curType > 0;
+            itemType[id] = approach(curType, 0, 1 / 0.36, 1 / 0.18, dt);
+            const subGoal = itemType[id] > 0.35 || lvl2Type[id] > 0.25 ? 1 : 0;
+            subTwigGrow[id] = approach(curSub, subGoal, 3.2, 3.8, dt);
+          }
+        } else if (isSelected) {
+          const stagger = Math.min(0.56, idx * 0.065);
+          const canSprout = branchLimbGrow[k] > 0.22 + stagger;
           subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 2.5, 3.3, dt);
           const itemGoal = subTwigGrow[id] > 0.66 ? 1 : 0;
           itemErasing[id] = curType > itemGoal;
@@ -4128,18 +5627,60 @@
     lastBranchLabelScreenBoxes = [];
     lastBioScreenBox = null;
     lastPortraitScreenBox = null;
+    lastExpYearScreenBoxes = [];
+    lastMeProjectsScreenBoxes = [];
 
-    const groundScreenAtCenter = worldToScreen(cam.x, 0).y;
-    for (const s of stars) {
-      const sx = (s.wx - cam.x * 0.28) * (cam.zoom * 0.65 + 0.35) + vw * 0.5;
-      const sy = (s.wy - cam.y * 0.28) * (cam.zoom * 0.65 + 0.35) + vh * 0.5;
-      if (sx < -12 || sx > vw + 12 || sy < -12 || sy > Math.min(vh + 12, groundScreenAtCenter - 8)) {
+    lastRenderedStars = [];
+    const horizonLimitY = worldToScreen(cam.x, -18).y;
+    for (let sIdx = 0; sIdx < stars.length; sIdx++) {
+      const s = stars[sIdx];
+      const depth = typeof s.depth === "number" ? s.depth : 0.6;
+      const camParallax = 0.20 + depth * 0.14;
+      const starScale = cam.zoom * (0.58 + depth * 0.12) + 0.35;
+
+      // 3D Depth Mouse Parallax (~16px for distant stars to ~42px for foreground stars)
+      const mouseShiftX = -starMouse.x * (10 + depth * 28);
+      const mouseShiftY = -starMouse.y * (8 + depth * 22);
+
+      const baseSx = (s.wx - cam.x * camParallax) * starScale + vw * 0.5 + mouseShiftX;
+      const baseSy = (s.wy - cam.y * camParallax) * starScale + vh * 0.5 + mouseShiftY;
+
+      // Subtle local cursor proximity repulsion & glow (< 95px)
+      let pushX = 0;
+      let pushY = 0;
+      let alphaBoost = 0;
+      if (starCursorScreen.active) {
+        const dxCur = baseSx - starCursorScreen.x;
+        const dyCur = baseSy - starCursorScreen.y;
+        const dist = Math.hypot(dxCur, dyCur);
+        if (dist < 95) {
+          const falloff = Math.pow(1 - dist / 95, 2);
+          const push = falloff * 7.5;
+          if (dist > 0.001) {
+            pushX = (dxCur / dist) * push;
+            pushY = (dyCur / dist) * push;
+          } else {
+            pushY = -push;
+          }
+          alphaBoost = falloff * 0.28;
+        }
+      }
+
+      const sx = baseSx + pushX;
+      const sy = baseSy + pushY;
+
+      if (sx < -16 || sx > vw + 16 || sy < -16 || sy > Math.min(vh + 12, horizonLimitY)) {
         continue;
       }
+
       const tw = 0.78 + 0.22 * Math.sin(timeSec * s.speed + s.phase);
       let glint = 0;
       if (s.glint) {
-        glint = Math.pow(0.5 + 0.5 * Math.sin(timeSec * s.glintSpeed + s.glintPhase), 3.6);
+        glint = clamp(
+          Math.pow(0.5 + 0.5 * Math.sin(timeSec * s.glintSpeed + s.glintPhase), 3.6) + alphaBoost * 0.65,
+          0,
+          1
+        );
       }
 
       let recordedHaloR = 0;
@@ -4155,8 +5696,8 @@
 
         const hGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, haloR);
         hGrad.addColorStop(0, `rgba(220, 224, 232, ${haloPeak.toFixed(3)})`);
-        hGrad.addColorStop(0.45, `rgba(196, 200, 210, ${(haloPeak * 0.34).toFixed(3)})`);
-        hGrad.addColorStop(1, "rgba(196, 200, 210, 0)");
+        hGrad.addColorStop(0.45, `rgba(198, 202, 210, ${(haloPeak * 0.36).toFixed(3)})`);
+        hGrad.addColorStop(1, "rgba(198, 202, 210, 0)");
         ctx.fillStyle = hGrad;
         ctx.beginPath();
         ctx.arc(sx, sy, haloR, 0, Math.PI * 2);
@@ -4209,11 +5750,31 @@
       }
 
       const coreR = s.glint ? (1.0 + 0.28 * glint * s.sparkleScale) : s.r;
-      const coreAlpha = clamp(s.alpha * tw * 0.85 + glint * 0.26, 0, 0.72);
-      ctx.fillStyle = `rgba(220, 224, 232, ${coreAlpha.toFixed(3)})`;
+      const coreAlpha = clamp(s.alpha * tw * 0.88 + glint * 0.26 + alphaBoost, 0, 0.90);
+      const rgbStr = s.glint || s.bright || alphaBoost > 0.05 ? "220, 224, 232" : "198, 202, 210";
+      ctx.fillStyle = `rgba(${rgbStr}, ${coreAlpha.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(sx, sy, coreR, 0, Math.PI * 2);
       ctx.fill();
+
+      lastRenderedStars.push({
+        idx: sIdx,
+        wx: s.wx,
+        wy: s.wy,
+        depth,
+        glint: Boolean(s.glint),
+        r: coreR,
+        baseSx,
+        baseSy,
+        sx,
+        sy,
+        mouseShiftX,
+        mouseShiftY,
+        pushX,
+        pushY,
+        alphaBoost,
+        coreAlpha
+      });
 
       if (glint > 0.04) {
         lastStarGlintLogs.push({
@@ -4290,14 +5851,53 @@
     return null;
   }
 
+  function computeClampedCameraLimits() {
+    const z = Math.max(0.28, targetCam.zoom || cam.zoom || 1);
+    if (!activeBranch) {
+      return {
+        minX: defaultTargetCam.x - 180,
+        maxX: defaultTargetCam.x + 180,
+        minY: defaultTargetCam.y - 140,
+        maxY: defaultTargetCam.y + 140
+      };
+    }
+    const bounds = computeActiveContentBounds();
+    const halfVW = (vw * 0.5) / z;
+    const halfVH = (vh * 0.5) / z;
+    const padSideW = 28 / z;
+    const padTopW = 56 / z;
+    const padBotW = 84 / z;
+
+    const minX = Math.min(defaultTargetCam.x - 80, bounds.minX - padSideW + halfVW);
+    const maxX = Math.max(defaultTargetCam.x + 80, bounds.maxX + padSideW - halfVW);
+    const minY = Math.min(defaultTargetCam.y - 40, bounds.minY - padTopW + halfVH);
+    const maxY = Math.max(defaultTargetCam.y + 40, bounds.maxY + padBotW - halfVH);
+    return { minX, maxX, minY, maxY };
+  }
+
+  // Smooth wheel scrolling: pans targetCam.y (and targetCam.x) within clamped content bounds whenever any branch is open!
+  function applyWheelDelta(deltaX, deltaY, deltaMode) {
+    if (!activeBranch) return false;
+    const modeScale = deltaMode === 1 ? 32 : deltaMode === 2 ? vh * 0.85 : 1;
+    const dxPx = (deltaX || 0) * modeScale;
+    const dyPx = (deltaY || 0) * modeScale;
+    const z = Math.max(0.28, targetCam.zoom || cam.zoom || 1);
+    const lim = computeClampedCameraLimits();
+
+    targetCam.x = clamp(targetCam.x + (dxPx / z) * 0.85, lim.minX - panOffset.x, lim.maxX - panOffset.x);
+    targetCam.y = clamp(targetCam.y + (dyPx / z) * 0.85, lim.minY - panOffset.y, lim.maxY - panOffset.y);
+    return true;
+  }
+
   function applyPanDeltaScreen(dxScreen, dyScreen) {
     const z = Math.max(0.25, cam.zoom || 1);
-    const maxPanX = activeBranch ? 460 : 180;
-    const maxPanY = activeBranch ? 480 : 140;
-    panOffset.x = clamp(panOffset.x - dxScreen / z, -maxPanX, maxPanX);
-    panOffset.y = clamp(panOffset.y - dyScreen / z, -maxPanY, maxPanY);
-    baseCam.x = targetCam.x + panOffset.x;
-    baseCam.y = targetCam.y + panOffset.y;
+    const lim = computeClampedCameraLimits();
+    const nextGoalX = clamp(targetCam.x + panOffset.x - dxScreen / z, lim.minX, lim.maxX);
+    const nextGoalY = clamp(targetCam.y + panOffset.y - dyScreen / z, lim.minY, lim.maxY);
+    panOffset.x = nextGoalX - targetCam.x;
+    panOffset.y = nextGoalY - targetCam.y;
+    baseCam.x = nextGoalX;
+    baseCam.y = nextGoalY;
     cam.x = baseCam.x;
     cam.y = baseCam.y;
   }
@@ -4372,6 +5972,31 @@
     }
   }
 
+  function updateStarPointerFromScreen(clientX, clientY) {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+    starMouseTarget.x = clamp(((clientX / Math.max(1, vw)) - 0.5) * 2, -1, 1);
+    starMouseTarget.y = clamp(((clientY / Math.max(1, vh)) - 0.5) * 2, -1, 1);
+    starCursorScreen.x = clientX;
+    starCursorScreen.y = clientY;
+    starCursorScreen.active = true;
+  }
+
+  window.addEventListener(
+    "mousemove",
+    (e) => {
+      updateStarPointerFromScreen(e.clientX, e.clientY);
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      updateStarPointerFromScreen(e.clientX, e.clientY);
+    },
+    { passive: true }
+  );
+
   let recentTouchMs = 0;
   const touchGesture = {
     active: false,
@@ -4392,6 +6017,7 @@
         return;
       }
       const t = e.touches[0];
+      updateStarPointerFromScreen(t.clientX, t.clientY);
       touchGesture.active = true;
       touchGesture.id = t.identifier;
       touchGesture.startX = t.clientX;
@@ -4409,6 +6035,7 @@
       recentTouchMs = performance.now();
       if (!touchGesture.active || !e.touches || e.touches.length !== 1) return;
       const t = e.touches[0];
+      updateStarPointerFromScreen(t.clientX, t.clientY);
       const totalDist = Math.hypot(t.clientX - touchGesture.startX, t.clientY - touchGesture.startY);
       if (totalDist >= 8) {
         touchGesture.isDragging = true;
@@ -4449,19 +6076,66 @@
     touchGesture.isDragging = false;
   });
 
+  const mouseGesture = {
+    down: false,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    isDragging: false,
+    suppressClickUntil: 0
+  };
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (performance.now() - recentTouchMs < 500) return;
+    if (e.button !== 0) return;
+    mouseGesture.down = true;
+    mouseGesture.startX = e.clientX;
+    mouseGesture.startY = e.clientY;
+    mouseGesture.lastX = e.clientX;
+    mouseGesture.lastY = e.clientY;
+    mouseGesture.isDragging = false;
+  });
+
   canvas.addEventListener("mousemove", (e) => {
     if (performance.now() - recentTouchMs < 500) return;
     lastPointerScreen.x = e.clientX;
     lastPointerScreen.y = e.clientY;
     lastPointerScreen.active = true;
+
+    if (mouseGesture.down) {
+      const dist = Math.hypot(e.clientX - mouseGesture.startX, e.clientY - mouseGesture.startY);
+      if (dist >= 7) {
+        mouseGesture.isDragging = true;
+      }
+      if (mouseGesture.isDragging) {
+        const dx = e.clientX - mouseGesture.lastX;
+        const dy = e.clientY - mouseGesture.lastY;
+        applyPanDeltaScreen(dx, dy);
+      }
+      mouseGesture.lastX = e.clientX;
+      mouseGesture.lastY = e.clientY;
+      if (mouseGesture.isDragging) return;
+    }
+
     portraitTouchToggled = false;
     isPortraitHovered = hitTestPortrait(e.clientX, e.clientY);
     hoveredHit = hitTestWorld(e.clientX, e.clientY);
     canvas.classList.toggle("is-pointer", Boolean(hoveredHit || isPortraitHovered));
   });
 
+  window.addEventListener("mouseup", () => {
+    if (mouseGesture.down && mouseGesture.isDragging) {
+      mouseGesture.suppressClickUntil = performance.now() + 180;
+    }
+    mouseGesture.down = false;
+    mouseGesture.isDragging = false;
+  });
+
   canvas.addEventListener("mouseleave", () => {
     lastPointerScreen.active = false;
+    mouseGesture.down = false;
+    mouseGesture.isDragging = false;
     if (!portraitTouchToggled) {
       isPortraitHovered = false;
     }
@@ -4471,6 +6145,7 @@
 
   canvas.addEventListener("click", (e) => {
     if (performance.now() - recentTouchMs < 500) return;
+    if (performance.now() < mouseGesture.suppressClickUntil) return;
     handleWorldClick(e.clientX, e.clientY);
   });
 
@@ -4481,8 +6156,8 @@
         return;
       }
       e.preventDefault();
-      if (activeBranch && vw < 960) {
-        applyPanDeltaScreen(-(e.deltaX || 0) * 0.65, -(e.deltaY || 0) * 0.65);
+      if (activeBranch) {
+        applyWheelDelta(e.deltaX || 0, e.deltaY || 0, e.deltaMode || 0);
       }
     },
     { passive: false }
@@ -5965,7 +7640,12 @@
         worldHitboxes: worldHitboxes.slice(),
         starsCount: stars.length,
         sparklingStarsCount: stars.filter((s) => s.glint).length,
+        pinpointStarsCount: stars.filter((s) => !s.glint).length,
         heroStarsCount: stars.filter((s) => s.hero).length,
+        starMouse: { ...starMouse },
+        starMouseTarget: { ...starMouseTarget },
+        starCursorScreen: { ...starCursorScreen },
+        lastRenderedStars: lastRenderedStars.slice(),
         panOffset: { ...panOffset },
         treeGrainStats: treeGrainStats ? { ...treeGrainStats } : null,
         hasGrainTile: Boolean(grainTileCanvas),
@@ -5981,8 +7661,14 @@
         lastStarGlintLogs: lastStarGlintLogs.slice(),
         lastBranchLabelScreenBoxes: lastBranchLabelScreenBoxes.slice(),
         lastHeaderScreenBox: lastHeaderScreenBox ? { ...lastHeaderScreenBox } : null,
+        expBoughRaw,
+        expBoughGrow,
+        expLeafPuffCount: expLeafPuffBuffers.length,
+        meProjectsHeadingType,
         lastBioScreenBox: lastBioScreenBox ? { ...lastBioScreenBox } : null,
-        lastPortraitScreenBox: lastPortraitScreenBox ? { ...lastPortraitScreenBox } : null
+        lastPortraitScreenBox: lastPortraitScreenBox ? { ...lastPortraitScreenBox } : null,
+        lastExpYearScreenBoxes: lastExpYearScreenBoxes.slice(),
+        lastMeProjectsScreenBoxes: lastMeProjectsScreenBoxes.slice()
       };
     },
     fastForward(seconds) {
@@ -5998,6 +7684,7 @@
     togglePlay,
     hitTestPortrait,
     setPointerMove(sx, sy) {
+      updateStarPointerFromScreen(sx, sy);
       lastPointerScreen.x = sx;
       lastPointerScreen.y = sy;
       lastPointerScreen.active = true;
@@ -6007,12 +7694,14 @@
       canvas.classList.toggle("is-pointer", Boolean(hoveredHit || isPortraitHovered));
     },
     openBranch(key) {
-      activeBranch = key;
+      resetPanOffset();
+      activeBranch = key === "projects" ? "me" : key;
       activeItem = null;
       syncCameraToActiveState(false);
     },
     openItem(branchKey, itemId) {
-      activeBranch = branchKey;
+      resetPanOffset();
+      activeBranch = branchKey === "projects" ? "me" : branchKey;
       activeItem = itemId;
       syncCameraToActiveState(false);
     },
@@ -6035,13 +7724,17 @@
     computeHomeCamera,
     computeHomeWorldBounds,
     computeBranchLayout,
+    computeExperienceBoughLayout,
     computeMeEditorialLayout,
+    computeActiveContentBounds,
+    computeClampedCameraLimits,
     layoutActionRows,
     worldToScreen,
     screenToWorld,
     hitTestWorld,
     handleWorldClick,
     applyPanDeltaScreen,
+    applyWheelDelta,
     resetPanOffset,
     getTrackExternalUrl,
     getTreeGrowAtSample(x, y) {
