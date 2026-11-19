@@ -55,7 +55,7 @@
   const BUF_SCALE = 2.0;
 
   const WORLD_HORIZON_SPAN = 3200;
-  const UNDERGROUND_DEPTH = 1500;
+  const UNDERGROUND_DEPTH = 2600;
   const TWIG_SHOOT_LEN = 58;
 
   const BRANCH_KEYS = ["work", "experience", "writing", "me"];
@@ -105,6 +105,7 @@
   let expBoughGrow = 0;
   let meProjectsHeadingType = 0;
   let meProjectsHeadingErasing = false;
+  let meProjectFilter = "all";
 
   const mainTwigGrow = { work: 0, experience: 0, writing: 0, me: 0 };
   const mainLabelType = { work: 0, experience: 0, writing: 0, me: 0 };
@@ -157,7 +158,14 @@
   let lastBioScreenBox = null;
   let lastPortraitScreenBox = null;
   let lastExpYearScreenBoxes = [];
+  let lastExpLeafPuffCircles = [];
+  let lastExpTextLineBoxes = [];
   let lastMeProjectsScreenBoxes = [];
+  let lastBioHighlightLogs = [];
+  let lastMeFilterScreenBoxes = [];
+  let lastMeProjectSubBoxes = [];
+  let lastMeProjectActionBoxes = [];
+  let lastTriggeredAction = null;
   let frameStrokeTextCalls = 0;
   let frameFillTextCalls = 0;
   let totalStrokeTextCalls = 0;
@@ -447,6 +455,297 @@
     return cy;
   }
 
+  // BiDi directional run splitter & exact visual [xLeft, xRight] span calculator for mixed RTL/LTR lines
+  const BIDI_LTR_RUN_RE = /[A-Za-z0-9]+(?:[\s.\-+]+[A-Za-z0-9]+)*/g;
+
+  function buildBiDiVisualRuns(line, lineLeftX, lineRightX, rtl) {
+    if (!rtl) {
+      return [
+        {
+          text: line,
+          dir: "ltr",
+          start: 0,
+          end: line.length,
+          left: lineLeftX,
+          right: lineLeftX + ctx.measureText(line).width
+        }
+      ];
+    }
+    const runs = [];
+    let lastIdx = 0;
+    BIDI_LTR_RUN_RE.lastIndex = 0;
+    let m;
+    while ((m = BIDI_LTR_RUN_RE.exec(line)) !== null) {
+      if (m.index > lastIdx) {
+        runs.push({
+          text: line.slice(lastIdx, m.index),
+          dir: "rtl",
+          start: lastIdx,
+          end: m.index
+        });
+      }
+      runs.push({
+        text: m[0],
+        dir: "ltr",
+        start: m.index,
+        end: m.index + m[0].length
+      });
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < line.length) {
+      runs.push({
+        text: line.slice(lastIdx),
+        dir: "rtl",
+        start: lastIdx,
+        end: line.length
+      });
+    }
+    if (runs.length === 0) {
+      runs.push({ text: "", dir: "rtl", start: 0, end: 0, left: lineRightX, right: lineRightX });
+      return runs;
+    }
+
+    let curRight = lineRightX;
+    for (let i = 0; i < runs.length; i++) {
+      const r = runs[i];
+      const w = ctx.measureText(r.text).width;
+      r.right = curRight;
+      r.left = curRight - w;
+      curRight = r.left;
+    }
+    return runs;
+  }
+
+  function measureBiDiPhraseSpan(line, segStart, segEnd, lineLeftX, lineRightX, rtl) {
+    if (!rtl) {
+      const xLeft = lineLeftX + ctx.measureText(line.slice(0, segStart)).width;
+      const xRight = xLeft + ctx.measureText(line.slice(segStart, segEnd)).width;
+      return { xLeft, xRight, width: Math.max(0, xRight - xLeft) };
+    }
+    const runs = buildBiDiVisualRuns(line, lineLeftX, lineRightX, true);
+    let minL = Infinity;
+    let maxR = -Infinity;
+    for (let i = 0; i < runs.length; i++) {
+      const R = runs[i];
+      if (segEnd <= R.start || segStart >= R.end) continue;
+      const subIdx = Math.max(0, segStart - R.start);
+      const endIdx = Math.min(R.text.length, segEnd - R.start);
+      const phraseSlice = R.text.slice(subIdx, endIdx);
+      let pLeft;
+      let pRight;
+      if (R.dir === "rtl") {
+        pLeft = R.right - ctx.measureText(R.text.slice(0, endIdx)).width;
+        pRight = pLeft + ctx.measureText(phraseSlice).width;
+      } else {
+        pLeft = R.left + ctx.measureText(R.text.slice(0, subIdx)).width;
+        pRight = pLeft + ctx.measureText(phraseSlice).width;
+      }
+      if (pLeft < minL) minL = pLeft;
+      if (pRight > maxR) maxR = pRight;
+    }
+    if (!Number.isFinite(minL) || !Number.isFinite(maxR)) {
+      const fbW = ctx.measureText(line.slice(segStart, segEnd)).width;
+      return { xLeft: lineRightX - fbW, xRight: lineRightX, width: fbW };
+    }
+    return { xLeft: minL, xRight: maxR, width: Math.max(0, maxR - minL) };
+  }
+
+  // Hand-inked 14x14 lithograph micro-emblems for Selected Projects
+  function drawProjectMicroEmblem(kind, cx, cy, color, glowAlpha) {
+    ctx.save();
+    ctx.strokeStyle = color || CHALK;
+    ctx.fillStyle = color || CHALK;
+    ctx.lineWidth = 1.15;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (glowAlpha && glowAlpha > 0.04) {
+      ctx.shadowColor = "rgba(220, 224, 232, 0.55)";
+      ctx.shadowBlur = 3.5 * glowAlpha;
+    }
+
+    if (kind === "crest") {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 6.3);
+      ctx.lineTo(cx + 5.5, cy - 4.1);
+      ctx.lineTo(cx + 4.6, cy + 1.9);
+      ctx.quadraticCurveTo(cx + 2.2, cy + 5.3, cx, cy + 6.4);
+      ctx.quadraticCurveTo(cx - 2.2, cy + 5.3, cx - 4.6, cy + 1.9);
+      ctx.lineTo(cx - 5.5, cy - 4.1);
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 2.9);
+      ctx.lineTo(cx, cy + 2.3);
+      ctx.moveTo(cx - 2.6, cy - 0.3);
+      ctx.lineTo(cx + 2.6, cy - 0.3);
+      ctx.stroke();
+    } else if (kind === "rail") {
+      ctx.beginPath();
+      ctx.moveTo(cx - 6.3, cy + 4.6);
+      ctx.quadraticCurveTo(cx, cy + 1.8, cx + 6.3, cy + 4.6);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 5.8, cy + 1.4);
+      ctx.lineTo(cx + 3.8, cy - 2.6);
+      ctx.quadraticCurveTo(cx + 6.4, cy - 1.3, cx + 4.8, cy + 0.9);
+      ctx.lineTo(cx - 4.8, cy + 2.5);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx - 3.2, cy - 4.2, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "trail") {
+      // Winding heritage Hijrah trail S-curve + 4-point desert compass star
+      ctx.beginPath();
+      ctx.moveTo(cx - 5.6, cy + 5.6);
+      ctx.bezierCurveTo(cx - 0.8, cy + 4.9, cx - 5.0, cy + 0.6, cx + 1.8, cy - 1.0);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx - 4.8, cy + 5.4, 0.85, 0, Math.PI * 2);
+      ctx.arc(cx - 1.6, cy + 2.1, 0.75, 0, Math.PI * 2);
+      ctx.fill();
+
+      const sx = cx + 3.2;
+      const sy = cy - 3.5;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - 2.9);
+      ctx.lineTo(sx, sy + 2.9);
+      ctx.moveTo(sx - 2.9, sy);
+      ctx.lineTo(sx + 2.9, sy);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(sx, sy, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "circuit") {
+      ctx.beginPath();
+      ctx.moveTo(cx - 5.6, cy + 4.8);
+      ctx.bezierCurveTo(cx - 5.6, cy - 1.8, cx + 5.4, cy + 2.6, cx + 5.4, cy - 4.8);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx + 0.8, cy - 4.6);
+      ctx.lineTo(cx - 1.3, cy - 0.6);
+      ctx.lineTo(cx + 1.2, cy - 0.6);
+      ctx.lineTo(cx - 0.9, cy + 3.4);
+      ctx.stroke();
+    } else if (kind === "crown") {
+      ctx.beginPath();
+      ctx.moveTo(cx - 5.4, cy + 4.2);
+      ctx.lineTo(cx - 6.0, cy - 1.5);
+      ctx.lineTo(cx - 2.2, cy + 1.2);
+      ctx.lineTo(cx, cy - 4.5);
+      ctx.lineTo(cx + 2.2, cy + 1.2);
+      ctx.lineTo(cx + 6.0, cy - 1.5);
+      ctx.lineTo(cx + 5.4, cy + 4.2);
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy - 6.0, 0.95, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "roshan") {
+      ctx.beginPath();
+      ctx.moveTo(cx - 4.6, cy + 1.6);
+      ctx.lineTo(cx - 4.6, cy - 2.6);
+      ctx.lineTo(cx, cy - 6.0);
+      ctx.lineTo(cx + 4.6, cy - 2.6);
+      ctx.lineTo(cx + 4.6, cy + 1.6);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 2.5, cy - 1.2);
+      ctx.lineTo(cx, cy - 3.6);
+      ctx.lineTo(cx + 2.5, cy - 1.2);
+      ctx.lineTo(cx, cy + 1.2);
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 6.2, cy + 4.5);
+      ctx.quadraticCurveTo(cx - 3.1, cy + 2.6, cx, cy + 4.5);
+      ctx.quadraticCurveTo(cx + 3.1, cy + 6.3, cx + 6.2, cy + 4.5);
+      ctx.stroke();
+    } else if (kind === "laurel") {
+      ctx.beginPath();
+      ctx.moveTo(cx - 0.8, cy + 5.6);
+      ctx.bezierCurveTo(cx - 6.2, cy + 3.4, cx - 6.2, cy - 2.8, cx - 1.8, cy - 5.6);
+      ctx.moveTo(cx + 0.8, cy + 5.6);
+      ctx.bezierCurveTo(cx + 6.2, cy + 3.4, cx + 6.2, cy - 2.8, cx + 1.8, cy - 5.6);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 4.8, cy + 1.2);
+      ctx.lineTo(cx - 2.6, cy - 0.2);
+      ctx.moveTo(cx - 4.8, cy - 2.0);
+      ctx.lineTo(cx - 2.5, cy - 3.0);
+      ctx.moveTo(cx + 4.8, cy + 1.2);
+      ctx.lineTo(cx + 2.6, cy - 0.2);
+      ctx.moveTo(cx + 4.8, cy - 2.0);
+      ctx.lineTo(cx + 2.5, cy - 3.0);
+      ctx.stroke();
+    } else {
+      const rx = cx - 6.1;
+      const ry = cy - 4.5;
+      const rw = 12.2;
+      const rh = 9.0;
+      ctx.beginPath();
+      ctx.moveTo(rx + 2, ry);
+      ctx.lineTo(rx + rw - 2, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + 2);
+      ctx.lineTo(rx + rw, ry + rh - 2);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - 2, ry + rh);
+      ctx.lineTo(rx + 2, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - 2);
+      ctx.lineTo(rx, ry + 2);
+      ctx.quadraticCurveTo(rx, ry, rx + 2, ry);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawFourPointSparkle(cx, cy, armLen, color, alpha) {
+    if (alpha <= 0.02) return;
+    ctx.save();
+    ctx.globalAlpha *= clamp(alpha, 0, 1);
+    ctx.strokeStyle = color || CHALK_BRIGHT;
+    ctx.fillStyle = color || CHALK_BRIGHT;
+    ctx.lineWidth = 0.85;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - armLen, cy);
+    ctx.lineTo(cx + armLen, cy);
+    ctx.moveTo(cx, cy - armLen);
+    ctx.lineTo(cx, cy + armLen);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 1.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRoundedCapsulePath(x, y, w, h, r) {
+    const rad = Math.min(r, w * 0.5, h * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.lineTo(x + w - rad, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+    ctx.lineTo(x + w, y + h - rad);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+    ctx.lineTo(x + rad, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rad);
+    ctx.lineTo(x, y + rad);
+    ctx.quadraticCurveTo(x, y, x + rad, y);
+    ctx.closePath();
+  }
+
   function drawWavyUnderline(xLeft, y, fullWidth, prog, seed, color, lineWidth, rtlOverride) {
     const p = clamp(prog, 0, 1);
     const span = fullWidth * p;
@@ -459,6 +758,7 @@
     lastUnderlineLogs.push({
       xLeft,
       xRight,
+      y,
       startX,
       endX,
       width: fullWidth,
@@ -468,12 +768,12 @@
 
     ctx.save();
     ctx.strokeStyle = color || CHALK_BRIGHT;
-    ctx.lineWidth = lineWidth || 1.15;
+    ctx.lineWidth = Math.min(1.25, lineWidth || 1.15);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.shadowColor = "rgba(0, 9, 20, 0.78)";
-    ctx.shadowBlur = 1.6;
-    ctx.shadowOffsetY = 1.1;
+    ctx.shadowBlur = 1.5;
+    ctx.shadowOffsetY = 1.0;
     ctx.beginPath();
     const step = 3.5;
     let dx = 0;
@@ -482,8 +782,8 @@
       const wx = rtlDir ? xRight - dx : xLeft + dx;
       const wy =
         y +
-        Math.sin(dx * 0.21 + seed) * 0.65 +
-        Math.cos(dx * 0.47 + seed * 1.63) * 0.32;
+        Math.sin(dx * 0.21 + seed) * 0.44 +
+        Math.cos(dx * 0.47 + seed * 1.63) * 0.20;
       if (first) {
         ctx.moveTo(wx, wy);
         first = false;
@@ -718,18 +1018,21 @@
     const detailColWidth = isCompactViewport ? 292 : DETAIL_COL_WIDTH;
     const subSpanX = isCompactViewport ? 50 : 92;
     const subTipX = forkX + dir * subSpanX;
-    const actionRowH = 21;
+    const isArLayout = isRTL();
+    const actionRowH = isArLayout ? 27 : 23;
+    const titleStepH = isArLayout ? 24.5 : 20.0;
+    const sumStepH = isArLayout ? 18.5 : 16.2;
     const isMeBranch = branchCfg.id === "me";
     const vGap = isMeBranch ? 13 : 18;
-    const maxStackBottomY = isMeBranch ? -36 : -86;
+    const maxStackBottomY = isMeBranch ? -36 : -54;
 
     const measuredItems = branchCfg.items.map((it) => {
       const titleLines = wrapLines(it.title, itemColWidth, canvasFont("600 13.6px", it.title));
       const sumLines = wrapLines(it.summary, itemColWidth, canvasFont("400 12.3px", it.summary));
       const actionRows = layoutActionRows(it.actions, itemColWidth);
-      const metaH = it.meta ? 13.5 : 0;
-      const textBodyH = metaH + titleLines.length * 17.4 + 2.5 + sumLines.length * 15.8;
-      const actionsH = actionRows.length > 0 ? 6 + actionRows.length * actionRowH + 4 : 0;
+      const metaH = it.meta ? 15 : 0;
+      const textBodyH = metaH + titleLines.length * titleStepH + 3 + sumLines.length * sumStepH;
+      const actionsH = actionRows.length > 0 ? 8 + actionRows.length * actionRowH + 4 : 0;
       const blockH = textBodyH + (actionRows.length > 0 ? actionsH : 8);
 
       const bodyParas = (it.body || []).map((p) =>
@@ -744,7 +1047,7 @@
         ? wrapLines(tagText, detailColWidth, tagFont)
         : [];
 
-      let detailH = 22;
+      let detailH = isArLayout ? 28 : 25;
       for (const pl of bodyParas) detailH += pl.length * 18.8 + 9;
       if (tagLines.length > 0) detailH += tagLines.length * 15.5 + 5;
 
@@ -831,26 +1134,31 @@
     resetCanvasLetterSpacing();
     const isMobile = vw < 680;
     const isTablet = vw >= 680 && vw < 1024;
-    const detailColWidth = isMobile ? 284 : isTablet ? 318 : 344;
+    const detailColWidth = isMobile ? 268 : isTablet ? 314 : 344;
     const G = EXP_BOUGH_GEOM;
 
-    // 5 alternating year-twig angles & offsets matching reference 2D03B4ED
+    // 6 authentic chronological milestones growing from Base (t=0.16, 2003–2008) to Crown Apex (t=0.92, 2023–Now)
+    // Every twig tip clears all 8 leaf-puff clusters with >= 18px pure sky margin!
     const twigConfigs = [
-      { t: 0.20, side: "right", angle: 0.08, len: 40, baseOffX: 12, baseOffY: 4 },
-      { t: 0.38, side: "left", angle: -2.22, len: 42, baseOffX: -8, baseOffY: -8 },
-      { t: 0.56, side: "right", angle: 0.20, len: 38, baseOffX: 8, baseOffY: 6 },
-      { t: 0.74, side: "left", angle: -1.72, len: 38, baseOffX: -2, baseOffY: -4 },
-      { t: 0.93, side: "right", angle: 0.48, len: 36, baseOffX: 2, baseOffY: 2 }
+      { t: 0.16, side: "right", isOuterTip: false, angle: 0.24,  len: 54, baseOffX: 16,  baseOffY: 10,   minCardTopY: -558, maxCardBotY: -46  },
+      { t: 0.31, side: "left",  isOuterTip: false, angle: -2.36, len: 50, baseOffX: -10, baseOffY: -10,  minCardTopY: -1280, maxCardBotY: -584 },
+      { t: 0.46, side: "right", isOuterTip: false, angle: 0.34,  len: 50, baseOffX: 12,  baseOffY: 10,   minCardTopY: -696, maxCardBotY: -46  },
+      { t: 0.62, side: "left",  isOuterTip: false, angle: -2.08, len: 48, baseOffX: -8,  baseOffY: -10,  minCardTopY: -1280, maxCardBotY: -678 },
+      { t: 0.77, side: "right", isOuterTip: false, angle: 0.44,  len: 46, baseOffX: 10,  baseOffY: 8,    minCardTopY: -784, maxCardBotY: -46  },
+      { t: 0.92, side: "right", isOuterTip: true,  angle: -0.27, len: 42, baseOffX: 24,  baseOffY: -7.5, minCardTopY: -868, maxCardBotY: -46  }
     ];
 
     const yearNodes = (bCfg.items || []).map((it, idx) => {
       const cfg = twigConfigs[idx] || {
-        t: typeof it.t === "number" ? it.t : 0.2 + idx * 0.18,
+        t: typeof it.t === "number" ? it.t : 0.16 + idx * 0.15,
         side: it.twigSide || (idx % 2 === 0 ? "right" : "left"),
-        angle: idx % 2 === 0 ? 0.15 : -2.0,
-        len: 38,
+        isOuterTip: idx === 5,
+        angle: idx % 2 === 0 ? 0.30 : -2.15,
+        len: 48,
         baseOffX: 0,
-        baseOffY: 0
+        baseOffY: 0,
+        minCardTopY: -900,
+        maxCardBotY: -46
       };
       const bx = evalCubic(G.x0, G.cx1, G.cx2, G.x3, cfg.t);
       const by = evalCubic(G.y0, G.cy1, G.cy2, G.y3, cfg.t);
@@ -867,22 +1175,24 @@
       const idleW = ctx.measureText(rawLabel).width;
 
       const isRightSide = cfg.side === "right";
-      const labelGap = 10;
+      const labelGap = 12;
       const labelY = tipY + (cfg.side === "left" ? -2 : 1);
       const boxLeft = isRightSide ? tipX + labelGap : tipX - labelGap - fullW;
       const boxRight = boxLeft + fullW;
+      const idleBoxLeft = isRightSide ? tipX + labelGap : tipX - labelGap - idleW;
+      const idleBoxRight = idleBoxLeft + idleW;
 
-      // Measure Level-2 roles & bullets for this year node
+      // Measure Level-2 roles & bullets for this year node (wrapped strictly within detailColWidth)
       const roles = Array.isArray(it.roles) ? it.roles : [];
       const measuredRoles = roles.map((r) => {
         const metaStr = [r.company, r.period].filter(Boolean).join("  ·  ");
         const metaFont = `500 ${lang === "ar" || hasArabicChars(metaStr) ? "11.4px" : "10.8px"} ${fontFamilyFor(metaStr)}`;
-        const metaLines = wrapLines(metaStr, detailColWidth, metaFont);
-        const roleLines = wrapLines(r.role, detailColWidth, canvasFont("600 13.8px", r.role));
+        const metaLines = wrapLines(metaStr, detailColWidth - 2, metaFont);
+        const roleLines = wrapLines(r.role, detailColWidth - 2, canvasFont("600 13.8px", r.role));
         const bulletLines = [];
         (r.bullets || []).forEach((bText) => {
           const prefixed = "• " + bText;
-          const bWrapped = wrapLines(prefixed, detailColWidth - 6, canvasFont("400 12.6px", prefixed));
+          const bWrapped = wrapLines(prefixed, detailColWidth - 12, canvasFont("400 12.6px", prefixed));
           bWrapped.forEach((ln, li) => {
             bulletLines.push({
               text: ln,
@@ -891,7 +1201,8 @@
             });
           });
         });
-        let h = metaLines.length * 15.5 + 2 + roleLines.length * 18.2 + 5;
+        const roleEndExtra = lang === "ar" ? 11.5 : 7.5;
+        let h = metaLines.length * 16.5 + 3 + roleLines.length * 19.5 + roleEndExtra;
         bulletLines.forEach((bl) => {
           h += 16.8 + bl.afterGap;
         });
@@ -905,25 +1216,28 @@
         };
       });
 
-      let detailH = 24; // collapse header row
+      let detailH = lang === "ar" ? 29 : 26; // collapse header row with underline clearance
       measuredRoles.forEach((mr, rIdx) => {
         detailH += mr.height + (rIdx < measuredRoles.length - 1 ? 14 : 4);
       });
 
       const shootDir = isRightSide ? 1 : -1;
-      const shootSpan = isMobile ? 48 : 74;
+      const shootSpan = isMobile ? 42 : 70;
       const s2StartX = isRightSide ? boxRight + 10 : boxLeft - 10;
       const s2StartY = labelY;
       const s2TipX = s2StartX + shootDir * shootSpan;
 
-      let cardTopY = labelY - Math.min(48, detailH * 0.18);
-      const maxAllowedBottomY = isRightSide ? -46 : -548;
+      const cardGap = 18;
+      let cardTopY = labelY - Math.min(44, detailH * 0.16);
+      if (typeof cfg.minCardTopY === "number" && cardTopY < cfg.minCardTopY) {
+        cardTopY = cfg.minCardTopY;
+      }
+      const maxAllowedBottomY = typeof cfg.maxCardBotY === "number" ? cfg.maxCardBotY : (isRightSide ? -46 : -584);
       if (cardTopY + detailH > maxAllowedBottomY) {
         cardTopY = maxAllowedBottomY - detailH;
       }
-      if (cardTopY < -980) cardTopY = -980;
 
-      const cardLeft = shootDir > 0 ? s2TipX + 14 : s2TipX - 14 - detailColWidth;
+      const cardLeft = shootDir > 0 ? s2TipX + cardGap : s2TipX - cardGap - detailColWidth;
       const cardRight = cardLeft + detailColWidth;
 
       return {
@@ -931,6 +1245,7 @@
         idx,
         t: cfg.t,
         side: cfg.side,
+        isOuterTip: Boolean(cfg.isOuterTip),
         isRightSide,
         angle: cfg.angle,
         len: cfg.len,
@@ -947,10 +1262,13 @@
         labelY,
         boxLeft,
         boxRight,
+        idleBoxLeft,
+        idleBoxRight,
         shootDir,
         s2StartX,
         s2StartY,
         s2TipX,
+        cardGap,
         cardTopY,
         cardLeft,
         cardRight,
@@ -960,39 +1278,54 @@
       };
     });
 
-    const tipX = bCfg.attachX + Math.cos(bCfg.angle) * TWIG_SHOOT_LEN;
-    const tipY = bCfg.attachY + Math.sin(bCfg.angle) * TWIG_SHOOT_LEN;
-    ctx.font = canvasFont("600 15px", `${bCfg.label}.`);
+    // Subtle collar sprig & active branch title in uncluttered open sky below-right of Puff 0
+    const collarStartX = 204;
+    const collarStartY = -460;
+    const collarTipX = 246;
+    const collarTipY = -438;
+    ctx.font = canvasFont("600 14.5px", `${bCfg.label}.`);
     const branchLabelW = ctx.measureText(`${bCfg.label}.`).width;
-    const openBranchLabelLeft = tipX + 12;
+    const openBranchLabelLeft = collarTipX + 12;
     const openBranchLabelRight = openBranchLabelLeft + branchLabelW;
-    const openBranchLabelY = tipY + 6;
+    const openBranchLabelY = collarTipY;
+
+    // Exact world bounding box of arching bough + all 8 leaf puffs + collar title + all 6 year labels
+    const puffBoundsMinX = Math.min(...EXP_PUFF_SPECS.map((p) => evalCubic(G.x0, G.cx1, G.cx2, G.x3, p.t) - p.rx * 1.2));
+    const puffBoundsMaxX = Math.max(...EXP_PUFF_SPECS.map((p) => evalCubic(G.x0, G.cx1, G.cx2, G.x3, p.t) + p.rx * 1.2));
+    const puffBoundsMinY = Math.min(...EXP_PUFF_SPECS.map((p) => evalCubic(G.y0, G.cy1, G.cy2, G.y3, p.t) - p.ry * 1.2));
+    const puffBoundsMaxY = Math.max(...EXP_PUFF_SPECS.map((p) => evalCubic(G.y0, G.cy1, G.cy2, G.y3, p.t) + p.ry * 1.2));
 
     const minYearX = Math.min(
-      G.x0 - 20,
-      openBranchLabelLeft - 8,
-      ...yearNodes.map((yn) => Math.min(yn.boxLeft, yn.bx - 48))
-    );
+      G.x0 - 16,
+      puffBoundsMinX,
+      ...yearNodes.map((yn) => Math.min(yn.boxLeft, yn.idleBoxLeft))
+    ) - 6;
     const maxYearX = Math.max(
-      G.x3 + 22,
-      openBranchLabelRight + 8,
-      ...yearNodes.map((yn) => yn.boxRight + 8)
-    );
+      G.x3 + 18,
+      puffBoundsMaxX,
+      openBranchLabelRight,
+      ...yearNodes.map((yn) => Math.max(yn.boxRight, yn.idleBoxRight))
+    ) + 6;
     const minYearY = Math.min(
-      G.y3 - 28,
-      ...yearNodes.map((yn) => yn.labelY - 22)
-    );
+      G.y3 - 18,
+      puffBoundsMinY,
+      ...yearNodes.map((yn) => yn.labelY - 14)
+    ) - 4;
     const maxYearY = Math.max(
-      openBranchLabelY + 18,
-      G.y0 + 18
-    );
+      openBranchLabelY + 14,
+      G.y0 + 12,
+      puffBoundsMaxY,
+      ...yearNodes.map((yn) => yn.labelY + 14)
+    ) + 4;
 
     return {
       geom: G,
       yearNodes,
       detailColWidth,
-      tipX,
-      tipY,
+      collarStartX,
+      collarStartY,
+      collarTipX,
+      collarTipY,
       branchLabelW,
       openBranchLabelLeft,
       openBranchLabelRight,
@@ -1004,9 +1337,19 @@
     };
   }
 
+  function isMeProjectMatchingFilter(item) {
+    if (!meProjectFilter || meProjectFilter === "all") return true;
+    if (!item) return false;
+    if (meProjectFilter === "mega" || meProjectFilter === "national") {
+      return item.category === "mega" || item.category === "national";
+    }
+    return item.category === meProjectFilter;
+  }
+
   function computeMeEditorialLayout(bCfg, lay) {
     const isStackMobile = vw < 680;
     const isCompactTablet = vw >= 680 && vw < 960;
+    const rtl = isRTL();
 
     syncCanvasFontVars();
     resetCanvasLetterSpacing();
@@ -1016,13 +1359,14 @@
     const openLabelLeft = openCenterX - labelW * 0.5;
     const openLabelRight = openCenterX + labelW * 0.5;
 
-    const bioColW = isStackMobile ? 302 : isCompactTablet ? 336 : 368;
+    const bioColW = isStackMobile ? 302 : isCompactTablet ? 344 : 382;
     const baseBioLeft = isStackMobile ? 276 : 294;
     const bioLeft = Math.max(baseBioLeft, Math.ceil(openLabelRight + (isStackMobile ? 16 : 22)));
     const bioRight = bioLeft + bioColW;
-    const bioTopY = isStackMobile ? -532 : -448;
-    const lineH = isStackMobile ? 20.4 : 21.5;
-    const paraGap = isStackMobile ? 11.0 : 13.5;
+    const bioTopY = isStackMobile ? -536 : -456;
+    const fontSize = 14;
+    const lineH = rtl ? Math.max(33, Math.round(fontSize * 2.36)) : (isStackMobile ? 25.5 : 26.5);
+    const paraGap = rtl ? 15.0 : 13.5;
 
     const firstText =
       (bCfg &&
@@ -1065,11 +1409,10 @@
     const visibleBioH = Math.max(0, totalBioH - paraGap);
     const bioBottomY = bioTopY + visibleBioH;
 
-    // Direct clickable contact links row right beneath the 3 bio paragraphs
     const contactActions = Array.isArray(bCfg.contactActions) ? bCfg.contactActions : [];
     const contactRows = layoutActionRows(contactActions, bioColW);
-    const contactRowH = 22;
-    const contactTopY = bioBottomY + 12;
+    const contactRowH = 26;
+    const contactTopY = bioBottomY + 14;
     const contactBottomY =
       contactRows.length > 0 ? contactTopY + contactRows.length * contactRowH : bioBottomY;
 
@@ -1079,7 +1422,7 @@
       : 600 / 476;
     const ph = pw * aspect;
     const px = isStackMobile ? bioLeft + (bioColW - pw) * 0.5 : bioRight + (isCompactTablet ? 34 : 46);
-    const py = isStackMobile ? contactBottomY + 16 : bioTopY + Math.max(-10, (visibleBioH - ph) * 0.35);
+    const py = isStackMobile ? contactBottomY + 18 : bioTopY + Math.max(-10, (visibleBioH - ph) * 0.28);
 
     const rotPadX = ph * 0.032 + 6;
     const rotPadY = pw * 0.032 + 6;
@@ -1088,25 +1431,78 @@
       ? py + ph + rotPadY
       : Math.max(contactBottomY, py + ph + rotPadY * 0.6);
 
-    // Selected Projects sub-section directly beneath the bio & portrait
     const projectsHeading = bCfg.projectsHeading || (lang === "ar" ? "مشاريع مختارة." : "selected projects.");
     ctx.font = canvasFont("600 15.2px", projectsHeading);
     const projectsHeadingW = ctx.measureText(projectsHeading).width;
 
-    const stemX = bioLeft - (isStackMobile ? 16 : 22);
-    const projectsHeadingY = topSectionBottomY + (isStackMobile ? 28 : 32);
-    const projColW = isStackMobile ? bioColW : isCompactTablet ? 348 : 392;
-    const projDetailW = isStackMobile ? 284 : isCompactTablet ? 316 : 344;
+    const projColW = isStackMobile ? bioColW : isCompactTablet ? 356 : 402;
+    const projDetailW = isStackMobile ? 276 : isCompactTablet ? 316 : 344;
     const projLeft = bioLeft;
     const projRight = projLeft + projColW;
-    const projVGap = isStackMobile ? 15 : 18;
+    const vineX = rtl ? projRight + (isStackMobile ? 18 : 24) : projLeft - (isStackMobile ? 18 : 24);
+    const stemX = vineX;
+    const projectsHeadingY = topSectionBottomY + (isStackMobile ? 34 : 38);
 
-    let projCursorY = projectsHeadingY + 32;
-    const measuredProjects = (bCfg.items || []).map((it, idx) => {
+    const rawFilters = Array.isArray(bCfg.projectFilters) && bCfg.projectFilters.length > 0
+      ? bCfg.projectFilters
+      : [
+          { id: "all", label: rtl ? "الكل" : "all" },
+          { id: "sports", label: rtl ? "الرياضة العالمية" : "global sports" },
+          { id: "seasons", label: rtl ? "المواسم والسياحة" : "seasons & tourism" },
+          { id: "mega", label: rtl ? "المشاريع الوطنية الكبرى" : "national mega-projects" }
+        ];
+    const filterTopY = projectsHeadingY + (rtl ? 38 : 34);
+    const filterGapX = 9;
+    const filterRowH = 27;
+    const filterPillH = 20.5;
+    const filterRows = [];
+    let curFRow = [];
+    let curFWidth = 0;
+    rawFilters.forEach((flt, fIdx) => {
+      const fSize = rtl || hasArabicChars(flt.label) ? 11.4 : 11.0;
+      ctx.font = `500 ${fSize}px ${fontFamilyFor(flt.label)}`;
+      const textW = ctx.measureText(flt.label).width;
+      const pillW = Math.ceil(textW + 26);
+      if (curFRow.length > 0 && curFWidth + filterGapX + pillW > projColW) {
+        filterRows.push({ items: curFRow, width: curFWidth });
+        curFRow = [];
+        curFWidth = 0;
+      }
+      const offX = curFRow.length === 0 ? 0 : curFWidth + filterGapX;
+      curFRow.push({ flt, fIdx, fSize, textW, pillW, offsetX: offX });
+      curFWidth = offX + pillW;
+    });
+    if (curFRow.length > 0) {
+      filterRows.push({ items: curFRow, width: curFWidth });
+    }
+    const filtersBottomY = filterTopY + filterRows.length * filterRowH;
+
+    const projVGap = isStackMobile ? 18 : 22;
+    const titleStepY = rtl ? 24.5 : 20.2;
+    const sumStepY = rtl ? 19.2 : 16.4;
+
+    const visibleItems = (bCfg.items || []).filter((it) => isMeProjectMatchingFilter(it));
+    let projCursorY = filtersBottomY + 16;
+
+    const measuredProjects = visibleItems.map((it, idx) => {
+      const badgeStr = it.impactBadge || "";
+      const badgeFontPx = rtl || hasArabicChars(badgeStr) ? 10.6 : 10.2;
+      ctx.font = `500 ${badgeFontPx}px ${fontFamilyFor(badgeStr)}`;
+      const badgeTextW = badgeStr ? ctx.measureText(badgeStr).width : 0;
+      const badgePillW = badgeStr ? Math.ceil(badgeTextW + 16) : 0;
+
+      const metaStr = it.meta || "";
+      const metaFontPx = rtl || hasArabicChars(metaStr) ? 10.8 : 10.2;
+      ctx.font = `500 ${metaFontPx}px ${fontFamilyFor(metaStr)}`;
+      const metaW = metaStr ? ctx.measureText(metaStr).width : 0;
+
+      const emblemSlotW = 22;
+      const metaInline = Boolean(metaStr && (emblemSlotW + badgePillW + 12 + metaW <= projColW));
+      const headerH = 22 + (metaStr && !metaInline ? 16.5 : 0);
+
       const titleLines = wrapLines(it.title, projColW, canvasFont("600 13.6px", it.title + "  +"));
       const sumLines = wrapLines(it.summary, projColW, canvasFont("400 12.3px", it.summary));
-      const metaH = it.meta ? 14 : 0;
-      const blockH = metaH + titleLines.length * 17.6 + 3 + sumLines.length * 15.8 + 8;
+      const blockH = headerH + titleLines.length * titleStepY + 3 + sumLines.length * sumStepY + 8;
 
       const bodyParas = (it.body || []).map((p) =>
         wrapLines(p, projDetailW, canvasFont("400 13px", p))
@@ -1115,19 +1511,23 @@
         Array.isArray(it.tags) && it.tags.length
           ? it.tags.map((t) => "#" + t).join("   ")
           : "";
-      const tagFont = `400 ${lang === "ar" || hasArabicChars(tagText) ? "11.5px" : "11px"} ${fontFamilyFor(tagText)}`;
+      const tagFont = `400 ${rtl || hasArabicChars(tagText) ? "11.5px" : "11px"} ${fontFamilyFor(tagText)}`;
       const tagLines = tagText ? wrapLines(tagText, projDetailW, tagFont) : [];
+      const actionRows = layoutActionRows(it.actions, projDetailW);
+      const actionRowH = rtl ? 29 : 24;
+      const actionsH = actionRows.length > 0 ? 10 + actionRows.length * actionRowH + 4 : 0;
 
-      let detailH = 22;
-      for (const pl of bodyParas) detailH += pl.length * 18.8 + 9;
-      if (tagLines.length > 0) detailH += tagLines.length * 15.5 + 5;
+      let detailH = rtl ? 30 : 25;
+      for (const pl of bodyParas) detailH += pl.length * (rtl ? 20.2 : 18.8) + 9;
+      if (tagLines.length > 0) detailH += tagLines.length * 16.0 + 5;
+      detailH += actionsH;
 
       const topY = projCursorY;
-      const jointY = topY + 14;
-      const lvl2StartX = projRight + 12;
-      const lvl2TipX = lvl2StartX + (isStackMobile ? 46 : 68);
+      const jointY = topY + 11;
+      const lvl2StartX = rtl ? vineX + 10 : projRight + 12;
+      const lvl2TipX = lvl2StartX + (isStackMobile ? 42 : 66);
       const lvl2TopY = topY - 4;
-      const lvl2BoxLeft = lvl2TipX + 14;
+      const lvl2BoxLeft = lvl2TipX + 16;
       const lvl2BoxRight = lvl2BoxLeft + projDetailW;
 
       projCursorY += blockH + projVGap;
@@ -1137,6 +1537,17 @@
         idx,
         topY,
         jointY,
+        headerH,
+        badgeStr,
+        badgeFontPx,
+        badgeTextW,
+        badgePillW,
+        metaStr,
+        metaFontPx,
+        metaW,
+        metaInline,
+        titleStepY,
+        sumStepY,
         blockH,
         detailH,
         projLeft,
@@ -1147,6 +1558,8 @@
         sumLines,
         bodyParas,
         tagLines,
+        actionRows,
+        actionRowH,
         lvl2StartX,
         lvl2TipX,
         lvl2TopY,
@@ -1156,20 +1569,18 @@
     });
 
     const projectsBottomY =
-      measuredProjects.length > 0 ? projCursorY - projVGap : projectsHeadingY + 24;
+      measuredProjects.length > 0 ? projCursorY - projVGap : filtersBottomY + 24;
 
-    // Initial framing box shows bio + portrait + contact + Selected Projects heading & lead projects cleanly
     const initialBottomY =
       measuredProjects.length > 0
         ? Math.min(
             projectsBottomY,
-            measuredProjects[Math.min(1, measuredProjects.length - 1)].topY +
-              measuredProjects[Math.min(1, measuredProjects.length - 1)].blockH
+            measuredProjects[0].topY + measuredProjects[0].blockH
           )
         : topSectionBottomY + 12;
 
-    const minContentX = Math.min(lay.tipX - 10, openLabelLeft - 10, stemX - 10);
-    const maxContentX = Math.max(openLabelRight + 10, bioRight + 12, projRight + 12, px + pw + rotPadX);
+    const minContentX = Math.min(lay.tipX - 10, openLabelLeft - 10, vineX - 14, bioLeft - 14);
+    const maxContentX = Math.max(openLabelRight + 10, bioRight + 12, projRight + 12, vineX + 14, px + pw + rotPadX);
     const minContentY = Math.min(bioTopY - 18, py - rotPadY, lay.tipY - 72);
     const maxContentY = isStackMobile ? contactBottomY + ph + rotPadY + 28 : initialBottomY;
 
@@ -1197,10 +1608,16 @@
       rotPadX,
       rotPadY,
       topSectionBottomY,
+      vineX,
       stemX,
       projectsHeading,
       projectsHeadingW,
       projectsHeadingY,
+      filterTopY,
+      filterRowH,
+      filterPillH,
+      filterRows,
+      filtersBottomY,
       projColW,
       projDetailW,
       projLeft,
@@ -1229,17 +1646,17 @@
     const bCfg = d.branches[activeBranch];
     if (activeBranch === "experience") {
       const expLay = computeExperienceBoughLayout(bCfg);
-      let minX = Math.min(0, expLay.minYearX - 36);
-      let maxX = expLay.maxYearX + 36;
-      let minY = expLay.minYearY - 36;
-      let maxY = Math.max(-290, expLay.maxYearY + 36);
+      let minX = Math.min(0, expLay.minYearX - 48);
+      let maxX = expLay.maxYearX + 48;
+      let minY = expLay.minYearY - 48;
+      let maxY = Math.max(-260, expLay.maxYearY + 48);
       if (activeItem) {
         const yn = expLay.yearNodes.find((n) => n.item.id === activeItem);
         if (yn) {
-          minX = Math.min(minX, yn.cardLeft - 28);
-          maxX = Math.max(maxX, yn.cardRight + 28);
-          minY = Math.min(minY, yn.cardTopY - 28);
-          maxY = Math.max(maxY, yn.cardTopY + yn.detailH + 34);
+          minX = Math.min(minX, yn.cardLeft - 48);
+          maxX = Math.max(maxX, yn.cardRight + 48);
+          minY = Math.min(minY, yn.cardTopY - 48);
+          maxY = Math.max(maxY, yn.cardTopY + yn.detailH + 56);
         }
       }
       return { minX, maxX, minY, maxY };
@@ -1317,32 +1734,74 @@
         const yn = expLay.yearNodes.find((n) => n.item.id === activeItem);
         if (yn) {
           if (isMobile) {
-            const minX = Math.min(yn.cardLeft, yn.boxLeft) - 12;
-            const maxX = Math.max(yn.cardRight, yn.boxRight) + 12;
-            const visibleH = Math.min(yn.detailH + 36, (vh - 130) / 0.72);
-            const minY = Math.min(yn.cardTopY, yn.labelY - 18) - 16;
-            const maxY = minY + Math.max(220, visibleH);
-            fitWorldBox(minX, maxX, minY, maxY, 72);
+            // Readable mobile zoom >= 0.84 framing the secondary shoot + full role/bullets card comfortably
+            const focusLeft = yn.isRightSide ? yn.s2StartX - 18 : yn.cardLeft - 10;
+            const focusRight = yn.isRightSide ? yn.cardRight + 10 : yn.s2StartX + 18;
+            const spanW = Math.max(296, focusRight - focusLeft);
+            const z = clamp((vw - 28) / spanW, 0.84, 0.94);
+            const topWorldY = Math.min(yn.cardTopY, yn.labelY - 16) - 10;
+            const botWorldY = Math.max(yn.cardTopY + yn.detailH, yn.labelY + 16) + 12;
+            const contentPxH = (botWorldY - topWorldY) * z;
+            const availPxH = vh - 68 - 76;
+
+            targetCam.zoom = z;
+            targetCam.x = (focusLeft + focusRight) * 0.5;
+            if (contentPxH <= availPxH) {
+              const midWorldY = (topWorldY + botWorldY) * 0.5;
+              const screenMidY = 68 + availPxH * 0.5;
+              targetCam.y = midWorldY - (screenMidY - vh * 0.5) / z;
+            } else {
+              targetCam.y = topWorldY - (68 - vh * 0.5) / z;
+            }
           } else {
-            const minX = Math.min(yn.bx - 36, yn.boxLeft, yn.cardLeft) - 22;
-            const maxX = Math.max(yn.bx + 36, yn.boxRight, yn.cardRight) + 22;
-            const minY = Math.min(yn.cardTopY, yn.labelY - 22) - 22;
-            const maxY = Math.max(yn.cardTopY + yn.detailH, yn.labelY + 22) + 22;
-            fitWorldBox(minX, maxX, minY, maxY, 74);
+            const padX = isCompactTablet ? 30 : 56;
+            const padTop = 68;
+            const padBot = 78;
+            const minX = Math.min(yn.bx - 28, yn.boxLeft, yn.cardLeft) - 18;
+            const maxX = Math.max(yn.bx + 28, yn.boxRight, yn.cardRight) + 18;
+            const minY = Math.min(yn.cardTopY, yn.labelY - 20) - 18;
+            const maxY = Math.max(yn.cardTopY + yn.detailH, yn.labelY + 20) + 18;
+            const zx = (vw - padX * 2) / Math.max(280, maxX - minX);
+            const zy = (vh - padTop - padBot) / Math.max(220, maxY - minY);
+            const z = isCompactTablet
+              ? clamp(Math.min(zx, zy), 0.86, 1.02)
+              : clamp(Math.min(zx, zy), 0.95, 1.04);
+            const screenMidY = padTop + (vh - padTop - padBot) * 0.5;
+
+            targetCam.zoom = z;
+            targetCam.x = (minX + maxX) * 0.5;
+            if ((maxY - minY) * z <= vh - padTop - padBot + 8) {
+              targetCam.y = (minY + maxY) * 0.5 - (screenMidY - vh * 0.5) / z;
+            } else {
+              targetCam.y = minY - (padTop - vh * 0.5) / z;
+            }
           }
           recordDefaultTargetAndApplyInstant(instant, false);
           return;
         }
       }
 
-      // Level 1 experience: upper-right olive crown in bottom-left corner + all 5 year labels unclipped!
-      const crownHintX = isMobile ? 108 : 18;
-      const crownHintY = isMobile ? -392 : -318;
-      const minX = Math.min(crownHintX, expLay.minYearX) - (isMobile ? 8 : 20);
-      const maxX = expLay.maxYearX + (isMobile ? 8 : 24);
-      const minY = expLay.minYearY - (isMobile ? 16 : 26);
-      const maxY = Math.max(crownHintY, expLay.maxYearY) + (isMobile ? 12 : 18);
-      fitWorldBox(minX, maxX, minY, maxY, isMobile ? 72 : 76);
+      // Level 1 experience: fit exact world box of bough + all 6 year labels inside [14..vw-14] x [64..vh-72]!
+      const leftPad = isMobile ? 20 : isCompactTablet ? 30 : 52;
+      const rightPad = leftPad;
+      const topPad = isMobile ? 72 : 74;
+      const botPad = isMobile ? 80 : 82;
+      const crownHintX = isMobile ? expLay.minYearX : Math.min(72, expLay.minYearX);
+      const crownHintY = isMobile ? expLay.maxYearY : Math.max(-368, expLay.maxYearY);
+      const minWX = Math.min(crownHintX, expLay.minYearX);
+      const maxWX = expLay.maxYearX;
+      const minWY = expLay.minYearY;
+      const maxWY = Math.max(crownHintY, expLay.maxYearY);
+
+      const zx = (vw - leftPad - rightPad) / Math.max(240, maxWX - minWX);
+      const zy = (vh - topPad - botPad) / Math.max(200, maxWY - minWY);
+      const z = clamp(Math.min(zx, zy), 0.36, 1.14);
+      const screenMidX = leftPad + (vw - leftPad - rightPad) * 0.5;
+      const screenMidY = topPad + (vh - topPad - botPad) * 0.5;
+
+      targetCam.zoom = z;
+      targetCam.x = (minWX + maxWX) * 0.5 - (screenMidX - vw * 0.5) / z;
+      targetCam.y = (minWY + maxWY) * 0.5 - (screenMidY - vh * 0.5) / z;
       recordDefaultTargetAndApplyInstant(instant, false);
       return;
     }
@@ -1359,12 +1818,12 @@
               mp.lvl2BoxLeft - 12,
               mp.lvl2BoxRight + 12,
               mp.lvl2TopY - 18,
-              mp.lvl2TopY + mp.detailH + 20,
+              mp.lvl2TopY + mp.detailH + 22,
               72
             );
           } else {
             fitWorldBox(
-              meLay.stemX - 18,
+              Math.min(mp.projLeft, meLay.vineX) - 20,
               mp.lvl2BoxRight + 22,
               Math.min(mp.topY, mp.lvl2TopY) - 26,
               Math.max(mp.topY + mp.blockH, mp.lvl2TopY + mp.detailH) + 26,
@@ -3350,7 +3809,7 @@
     ctx.font = fontSpec;
     ctx.direction = rtl ? "rtl" : "ltr";
     ctx.textAlign = rtl ? "right" : "left";
-    ctx.textBaseline = "top";
+    ctx.textBaseline = "alphabetic";
 
     drawSkyTextFeather(
       (bioLeft + bioRight) * 0.5,
@@ -3378,9 +3837,11 @@
         if (take > 0) {
           ctx.font = fontSpec;
           const sub = fullLine.slice(0, take);
-          drawChalkText(sub, textX, cy, CHALK, 14, 1.0);
-
+          const baselineY = cy + 15.0;
+          const underlineY = baselineY + (rtl ? 10.6 : 7.0);
           const lineSpan = wp.lineSpans && wp.lineSpans[lIdx];
+          const hoveredPhraseDraws = [];
+
           wp.highlights.forEach((hl, hIdx) => {
             let pos = -1;
             let segPhrase = "";
@@ -3401,44 +3862,118 @@
 
             if (pos !== -1 && segPhrase && take > pos) {
               const visLen = Math.min(segPhrase.length, take - pos);
-              const visPhrase = fullLine.slice(pos, pos + visLen);
-              const prefix = fullLine.slice(0, pos);
-              const prefixW = ctx.measureText(prefix).width;
-              const phraseW = ctx.measureText(visPhrase).width;
-              const fullPhraseW = Math.max(1, ctx.measureText(segPhrase).width);
-
-              const fullLeft = rtl ? textX - prefixW - fullPhraseW : textX + prefixW;
+              const fullSpan = measureBiDiPhraseSpan(
+                fullLine,
+                pos,
+                pos + segPhrase.length,
+                bioLeft,
+                bioRight,
+                rtl
+              );
+              const visSpan = measureBiDiPhraseSpan(
+                fullLine,
+                pos,
+                pos + visLen,
+                bioLeft,
+                bioRight,
+                rtl
+              );
+              const fullPhraseW = Math.max(1, fullSpan.width);
+              const fullLeft = fullSpan.xLeft;
               const hitId = `mebio:${pIdx}:${hIdx}:${lIdx}`;
-              const isHov = hoveredHit && hoveredHit.id === hitId;
-              const uProg = clamp(phraseW / fullPhraseW, 0, 1);
+              const isInteractive = Boolean(hl.projectId || hl.action);
+              const isHov = isInteractive && hoveredHit && hoveredHit.id === hitId;
+              const uProg = clamp(visSpan.width / fullPhraseW, 0, 1);
 
               drawWavyUnderline(
                 fullLeft,
-                cy + (meLay.isStackMobile ? 16.6 : 17.5),
+                underlineY,
                 fullPhraseW,
                 uProg,
                 pIdx * 5.3 + hIdx * 2.7 + lIdx,
-                hl.action
+                isInteractive
                   ? isHov
                     ? CHALK_BRIGHT
-                    : "rgba(220, 224, 232, 0.92)"
-                  : "rgba(198, 202, 210, 0.85)",
-                hl.action ? (isHov ? 1.85 : 1.55) : 1.45,
+                    : "rgba(220, 224, 232, 0.90)"
+                  : "rgba(198, 202, 210, 0.78)",
+                isInteractive ? (isHov ? 1.25 : 1.18) : 1.10,
                 rtl
               );
 
-              if (hl.action && activeBranch === "me" && visLen === segPhrase.length) {
-                worldHitboxes.push({
-                  id: hitId,
-                  kind: "action",
-                  action: hl.action,
-                  x: fullLeft - 4,
-                  y: cy - 2,
-                  w: fullPhraseW + 8,
-                  h: 22
+              if (activeBranch === "me" && visLen === segPhrase.length) {
+                lastBioHighlightLogs.push({
+                  phrase: hl.phrase,
+                  segPhrase,
+                  projectId: hl.projectId || null,
+                  lineText: fullLine,
+                  baselineY,
+                  underlineY,
+                  deltaY: underlineY - baselineY,
+                  xLeft: fullSpan.xLeft,
+                  xRight: fullSpan.xRight,
+                  width: fullPhraseW
+                });
+
+                if (hl.projectId) {
+                  worldHitboxes.push({
+                    id: hitId,
+                    kind: "project-jump",
+                    projectId: hl.projectId,
+                    phrase: hl.phrase,
+                    x: fullLeft - 4,
+                    y: baselineY - 15,
+                    w: fullPhraseW + 8,
+                    h: (underlineY - (baselineY - 15)) + 5
+                  });
+                } else if (hl.action) {
+                  worldHitboxes.push({
+                    id: hitId,
+                    kind: "action",
+                    action: hl.action,
+                    x: fullLeft - 4,
+                    y: baselineY - 15,
+                    w: fullPhraseW + 8,
+                    h: (underlineY - (baselineY - 15)) + 5
+                  });
+                }
+              }
+
+              if (isHov && visLen === segPhrase.length) {
+                hoveredPhraseDraws.push({
+                  segPhrase,
+                  xLeft: fullSpan.xLeft,
+                  xRight: fullSpan.xRight
                 });
               }
             }
+          });
+
+          drawChalkText(sub, textX, baselineY, CHALK, 14, 1.0);
+
+          hoveredPhraseDraws.forEach((hd) => {
+            ctx.save();
+            const phraseRtl = hasArabicChars(hd.segPhrase);
+            ctx.direction = phraseRtl ? "rtl" : "ltr";
+            ctx.textAlign = phraseRtl ? "right" : "left";
+            drawChalkText(
+              hd.segPhrase,
+              phraseRtl ? hd.xRight : hd.xLeft,
+              baselineY,
+              CHALK_BRIGHT,
+              14,
+              1.0
+            );
+            drawFourPointSparkle(
+              rtl ? hd.xLeft - 4 : hd.xRight + 4,
+              baselineY - 10,
+              3.4,
+              CHALK_BRIGHT,
+              0.92
+            );
+            ctx.restore();
+            ctx.font = fontSpec;
+            ctx.direction = rtl ? "rtl" : "ltr";
+            ctx.textAlign = rtl ? "right" : "left";
           });
         }
         cy += lineH;
@@ -3503,7 +4038,7 @@
       }
     }
 
-    // Contact links row (mkassab1984@gmail.com & +966 56 332 1033) directly beneath the 3 bio paragraphs
+    // Contact links row directly beneath the 3 bio paragraphs
     if (meLay.contactRows && meLay.contactRows.length > 0 && bioProg > 0.45) {
       const contactP = clamp((bioProg - 0.45) / 0.55, 0, 1);
       ctx.save();
@@ -3521,42 +4056,38 @@
           const actRight = bioRight - offsetX;
           const actLeft = rtl ? actRight - tw : bioLeft + offsetX;
           const actAnchorX = rtl ? actRight : actLeft;
-          ctx.direction = hasArabicChars(act.label) ? "rtl" : "ltr";
+          const isArAct = hasArabicChars(act.label);
+          ctx.direction = isArAct ? "rtl" : "ltr";
           ctx.textAlign = rtl ? "right" : "left";
-          ctx.textBaseline = "top";
+          ctx.textBaseline = "alphabetic";
+          const actBaseY = ccy + 13.0;
+          const actUnderY = actBaseY + ((rtl || isArAct) ? 10.6 : 6.8);
 
-          const typedAct = drawDiscreteTextLine(
-            act.label,
-            localP,
-            meBioErasing,
-            actAnchorX,
-            ccy,
-            actHov ? CHALK_BRIGHT : CHALK,
-            12.4,
-            1.0,
-            2.0
-          );
-          if (typedAct) {
+          const visCnt = computeDiscreteCharCount(act.label, localP, meBioErasing, 2.0);
+          if (visCnt > 0) {
+            const typedAct = act.label.slice(0, visCnt);
             const typedW = ctx.measureText(typedAct).width;
             drawWavyUnderline(
               actLeft,
-              ccy + 15.8,
+              actUnderY,
               tw,
               clamp(typedW / Math.max(1, tw), 0, 1),
               aIdx * 3.7 + rIdx * 1.9 + 1.2,
-              actHov ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.88)",
-              actHov ? 1.45 : 1.2,
+              actHov ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.86)",
+              actHov ? 1.25 : 1.12,
               rtl
             );
+            drawChalkText(typedAct, actAnchorX, actBaseY, actHov ? CHALK_BRIGHT : CHALK, 12.4, 1.0);
+
             if (activeBranch === "me" && localP > 0.35) {
               worldHitboxes.push({
                 id: actHitId,
                 kind: "action",
                 action: act,
                 x: actLeft - 5,
-                y: ccy - 3,
+                y: ccy - 2,
                 w: tw + 10,
-                h: 21
+                h: 24
               });
             }
           }
@@ -3567,45 +4098,104 @@
     }
 
     // =========================================================================
-    // SELECTED PROJECTS SUB-SHOOT & 9 INTERACTIVE WORLD-SPACE NODES INSIDE ME
+    // SELECTED PROJECTS LIVING OLIVE VINE, 4 BOTANICAL FILTERS & 10 EMBLEM CARDS
     // =========================================================================
     const headProg = meProjectsHeadingType;
-    const stemX = meLay.stemX + canopySway * 0.2;
+    const vineBaseX = meLay.vineX + canopySway * 0.2;
     const headY = meLay.projectsHeadingY;
+    const pLeft = meLay.projLeft + canopySway * 0.2;
+    const pRight = meLay.projRight + canopySway * 0.2;
     const subShootProg = easeOutCubic(clamp((limbRaw - 0.16) / 0.78, 0, 1));
 
-    if (subShootProg > 0.01 && meLay.measuredProjects.length > 0) {
-      // Delicate sprouting wooden sub-shoot curving down from upper bough to Selected Projects heading
-      drawGrowingShoot(
-        boughEndX - 6,
-        boughEndY + 8,
-        stemX - 24,
-        (boughEndY + headY) * 0.45,
-        stemX - 8,
-        headY - 46,
-        stemX,
-        headY + 10,
-        subShootProg,
-        2.0,
-        1.35,
-        CHALK,
-        5.8
-      );
+    function vineXAt(wy) {
+      return vineBaseX + Math.sin(wy * 0.030 + 0.85) * 3.2;
+    }
 
-      // Vertical botanical stem connecting all 9 Selected Projects
+    if (subShootProg > 0.01 && meLay.measuredProjects.length > 0) {
+      const vineStartX = vineXAt(headY + 10);
+      const corridorY = meLay.topSectionBottomY + (headY - meLay.topSectionBottomY) * 0.48;
+      if (rtl) {
+        const leftCorridorX = pLeft - 20;
+        const p1 = clamp(subShootProg / 0.62, 0, 1);
+        drawGrowingShoot(
+          boughEndX - 6,
+          boughEndY + 8,
+          leftCorridorX - 18,
+          (boughEndY + corridorY) * 0.45,
+          leftCorridorX,
+          corridorY - 24,
+          leftCorridorX + 12,
+          corridorY,
+          p1,
+          2.0,
+          1.45,
+          CHALK,
+          5.8
+        );
+        const p2 = clamp((subShootProg - 0.55) / 0.45, 0, 1);
+        if (p2 > 0.01) {
+          drawGrowingShoot(
+            leftCorridorX + 12,
+            corridorY,
+            (leftCorridorX + vineStartX) * 0.42,
+            corridorY - 4,
+            vineStartX - 10,
+            corridorY + 4,
+            vineStartX,
+            headY + 10,
+            p2,
+            1.45,
+            1.35,
+            CHALK,
+            8.1
+          );
+        }
+      } else {
+        drawGrowingShoot(
+          boughEndX - 6,
+          boughEndY + 8,
+          vineStartX - 22,
+          (boughEndY + headY) * 0.45,
+          vineStartX - 6,
+          headY - 42,
+          vineStartX,
+          headY + 10,
+          subShootProg,
+          2.0,
+          1.35,
+          CHALK,
+          5.8
+        );
+      }
+
       const lastProj = meLay.measuredProjects[meLay.measuredProjects.length - 1];
-      const stemBottomY = lastProj.jointY;
+      const stemTopY = headY + 10;
+      const stemBottomY = lastProj.jointY + 6;
       const stemGrowP = easeOutCubic(clamp((limbRaw - 0.28) / 0.72, 0, 1));
-      if (stemGrowP > 0.01) {
-        const curStemEnd = headY + 10 + (stemBottomY - (headY + 10)) * stemGrowP;
+      if (stemGrowP > 0.01 && stemBottomY > stemTopY) {
+        const curStemEnd = stemTopY + (stemBottomY - stemTopY) * stemGrowP;
         ctx.save();
-        ctx.strokeStyle = "rgba(198, 202, 210, 0.72)";
+        ctx.strokeStyle = "rgba(198, 202, 210, 0.78)";
         ctx.lineCap = "round";
-        ctx.lineWidth = 1.35;
-        ctx.beginPath();
-        ctx.moveTo(stemX, headY + 10);
-        ctx.lineTo(stemX, curStemEnd);
-        ctx.stroke();
+        ctx.lineJoin = "round";
+        const vineSteps = Math.max(14, Math.ceil((curStemEnd - stemTopY) / 14));
+        let prevVX = vineXAt(stemTopY);
+        let prevVY = stemTopY;
+        for (let s = 1; s <= vineSteps; s++) {
+          const u = s / vineSteps;
+          const vy = stemTopY + (curStemEnd - stemTopY) * u;
+          const vx = vineXAt(vy);
+          ctx.lineWidth = 1.65 - 0.45 * u;
+          ctx.beginPath();
+          ctx.moveTo(prevVX, prevVY);
+          ctx.lineTo(vx, vy);
+          ctx.stroke();
+          prevVX = vx;
+          prevVY = vy;
+        }
+        if (stemGrowP > 0.85) {
+          drawTeardropBud(ctx, prevVX, prevVY + 3.5, 4.0, 1.8, Math.PI * 0.5, CHALK);
+        }
         ctx.restore();
       }
     }
@@ -3616,60 +4206,155 @@
       ctx.font = canvasFont("600 15.2px", meLay.projectsHeading);
       ctx.direction = rtl ? "rtl" : "ltr";
       ctx.textAlign = rtl ? "right" : "left";
-      ctx.textBaseline = "top";
+      ctx.textBaseline = "alphabetic";
 
-      const pLeft = meLay.projLeft + canopySway * 0.2;
-      const pRight = meLay.projRight + canopySway * 0.2;
       const hAnchorX = rtl ? pRight : pLeft;
+      const headBaseY = headY + 15.5;
+      const headUnderY = headBaseY + (rtl ? 10.6 : 7.0);
 
       drawSkyTextFeather(
         (pLeft + pRight) * 0.5,
-        headY + 10,
-        110,
+        headY + 14,
+        118,
         pLeft - 20,
         headY - 8,
         meLay.projColW + 40,
-        34
+        42
       );
 
-      // Tiny connector sprig from stemX to heading
+      const vxHead = vineXAt(headY + 10);
       ctx.strokeStyle = CHALK_BRIGHT;
       ctx.lineWidth = 1.25;
       ctx.beginPath();
-      ctx.moveTo(stemX, headY + 9);
-      ctx.lineTo(pLeft - 8, headY + 9);
+      ctx.moveTo(vxHead, headY + 10);
+      ctx.lineTo(rtl ? pRight + 8 : pLeft - 8, headY + 10);
       ctx.stroke();
-      drawTeardropBud(ctx, stemX + 4, headY + 8.5, 4.4, 2.0, -0.45, CHALK_BRIGHT);
-
-      const typedHead = drawDiscreteTextLine(
-        meLay.projectsHeading,
-        headProg,
-        meProjectsHeadingErasing,
-        hAnchorX,
-        headY,
-        CHALK_BRIGHT,
-        15.2,
-        1.0,
-        2.2
+      drawTeardropBud(
+        ctx,
+        vxHead + (rtl ? -4 : 4),
+        headY + 9.2,
+        4.4,
+        2.0,
+        rtl ? Math.PI + 0.45 : -0.45,
+        CHALK_BRIGHT
       );
-      if (typedHead) {
+
+      const headVis = computeDiscreteCharCount(meLay.projectsHeading, headProg, meProjectsHeadingErasing, 2.2);
+      if (headVis > 0) {
+        const typedHead = meLay.projectsHeading.slice(0, headVis);
         const typedW = ctx.measureText(typedHead).width;
         const uLeft = rtl ? pRight - meLay.projectsHeadingW : pLeft;
         drawWavyUnderline(
           uLeft,
-          headY + 18.2,
+          headUnderY,
           meLay.projectsHeadingW,
           clamp(typedW / Math.max(1, meLay.projectsHeadingW), 0, 1),
           9.4,
           CHALK_BRIGHT,
-          1.35,
+          1.22,
           rtl
         );
+        drawChalkText(typedHead, hAnchorX, headBaseY, CHALK_BRIGHT, 15.2, 1.0);
       }
+
+      if (headProg > 0.35 && meLay.filterRows && meLay.filterRows.length > 0) {
+        const fltP = easeOutCubic(clamp((headProg - 0.35) / 0.65, 0, 1));
+        ctx.save();
+        ctx.globalAlpha = fltP;
+        let fRowY = meLay.filterTopY;
+        meLay.filterRows.forEach((row) => {
+          row.items.forEach((entry) => {
+            const { flt, fSize, pillW, offsetX } = entry;
+            const isActiveFlt = meProjectFilter === flt.id;
+            const fltHitId = `projfilter:${flt.id}`;
+            const isFltHov = hoveredHit && hoveredHit.id === fltHitId;
+
+            const pillLeft = rtl ? pRight - offsetX - pillW : pLeft + offsetX;
+            const pillRight = pillLeft + pillW;
+            const pillTop = fRowY;
+            const pillH = meLay.filterPillH;
+
+            ctx.save();
+            drawRoundedCapsulePath(pillLeft, pillTop, pillW, pillH, 10);
+            ctx.fillStyle = isActiveFlt
+              ? "rgba(220, 224, 232, 0.14)"
+              : isFltHov
+                ? "rgba(198, 202, 210, 0.09)"
+                : "rgba(0, 22, 46, 0.55)";
+            ctx.fill();
+            ctx.strokeStyle = isActiveFlt
+              ? "rgba(220, 224, 232, 0.82)"
+              : isFltHov
+                ? "rgba(198, 202, 210, 0.68)"
+                : "rgba(154, 162, 178, 0.42)";
+            ctx.lineWidth = isActiveFlt ? 1.15 : 0.95;
+            if (!isActiveFlt && typeof ctx.setLineDash === "function") {
+              ctx.setLineDash([2.5, 2.5]);
+            }
+            ctx.stroke();
+            if (typeof ctx.setLineDash === "function") {
+              ctx.setLineDash([]);
+            }
+
+            const dotX = rtl ? pillRight - 8.5 : pillLeft + 8.5;
+            const dotY = pillTop + pillH * 0.5;
+            ctx.fillStyle = isActiveFlt ? CHALK_BRIGHT : "rgba(154, 162, 178, 0.62)";
+            ctx.beginPath();
+            ctx.arc(dotX, dotY, isActiveFlt ? 2.1 : 1.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            resetCanvasLetterSpacing();
+            ctx.font = `${isActiveFlt ? 600 : 500} ${fSize}px ${fontFamilyFor(flt.label)}`;
+            ctx.direction = rtl || hasArabicChars(flt.label) ? "rtl" : "ltr";
+            ctx.textAlign = rtl ? "right" : "left";
+            ctx.textBaseline = "middle";
+            const fTextX = rtl ? pillRight - 15 : pillLeft + 15;
+            drawChalkText(
+              flt.label,
+              fTextX,
+              dotY + 0.5,
+              isActiveFlt || isFltHov ? CHALK_BRIGHT : CHALK_MUTED,
+              fSize,
+              1.0
+            );
+            ctx.restore();
+
+            if (activeBranch === "me") {
+              const ftl = worldToScreen(pillLeft, pillTop);
+              const fbr = worldToScreen(pillRight, pillTop + pillH);
+              lastMeFilterScreenBoxes.push({
+                id: flt.id,
+                label: flt.label,
+                active: isActiveFlt,
+                worldLeft: pillLeft,
+                worldRight: pillRight,
+                worldTop: pillTop,
+                worldBottom: pillTop + pillH,
+                screenLeft: ftl.x,
+                screenRight: fbr.x,
+                screenTop: ftl.y,
+                screenBottom: fbr.y
+              });
+
+              worldHitboxes.push({
+                id: fltHitId,
+                kind: "project-filter",
+                filterKey: flt.id,
+                x: pillLeft - 3,
+                y: pillTop - 3,
+                w: pillW + 6,
+                h: pillH + 6
+              });
+            }
+          });
+          fRowY += meLay.filterRowH;
+        });
+        ctx.restore();
+      }
+
       ctx.restore();
     }
 
-    // Render each of the 9 Selected Projects nodes + Level-2 expanded shoot
     meLay.measuredProjects.forEach((mp, idx) => {
       const id = mp.item.id;
       const stRaw = subTwigGrow[id] || 0;
@@ -3681,34 +4366,56 @@
       const boxL = mp.projLeft + canopySway * 0.2;
       const boxR = mp.projRight + canopySway * 0.2;
       const nodeY = mp.jointY;
+      const vxNode = vineXAt(nodeY - 4);
+      const twigTargetX = rtl ? boxR + 6 : boxL - 6;
+
+      const itemHitId = "item:" + id;
+      const isItemHov = hoveredHit && hoveredHit.id === itemHitId;
+      const isItemOpen = activeItem === id;
+      hoverAmt[itemHitId] =
+        (hoverAmt[itemHitId] || 0) +
+        ((isItemHov || isItemOpen ? 1 : 0) - (hoverAmt[itemHitId] || 0)) * 0.24;
+      const ihp = hoverAmt[itemHitId];
 
       if (stProg > 0.01) {
-        drawGrowingShoot(
-          stemX,
-          nodeY - 4,
-          stemX + 7,
-          nodeY - 1,
-          boxL - 14,
+        const twigEnd = drawGrowingShoot(
+          vxNode,
+          nodeY - 5,
+          vxNode + (twigTargetX - vxNode) * 0.38,
+          nodeY - 3,
+          vxNode + (twigTargetX - vxNode) * 0.75,
           nodeY,
-          boxL - 6,
+          twigTargetX,
           nodeY,
           stProg,
           1.55,
           1.05,
-          CHALK,
+          isItemOpen || ihp > 0.15 ? CHALK_BRIGHT : CHALK,
           idx * 2.9 + 4.2
         );
+
+        if (tuftBuffer && stProg > 0.35) {
+          const miniS = smoothstep(0.35, 1.0, stProg) * (13.5 + ihp * 2.5);
+          const tuftCx = vxNode + (twigEnd.endX - vxNode) * 0.55;
+          const tuftCy = nodeY - 3.5;
+          ctx.save();
+          ctx.globalAlpha = smoothstep(0.35, 1.0, stProg) * (0.76 + ihp * 0.22);
+          ctx.drawImage(tuftBuffer, tuftCx - miniS * 0.5, tuftCy - miniS * 0.5, miniS, miniS);
+          ctx.restore();
+        }
+
+        if (ihp > 0.04) {
+          drawFourPointSparkle(
+            twigEnd.endX + (rtl ? 3.5 : -3.5),
+            nodeY - 7.5,
+            3.2 + ihp * 1.4,
+            CHALK_BRIGHT,
+            ihp * 0.95
+          );
+        }
       }
 
       if (tProg > 0.004) {
-        const itemHitId = "item:" + id;
-        const isItemHov = hoveredHit && hoveredHit.id === itemHitId;
-        const isItemOpen = activeItem === id;
-        hoverAmt[itemHitId] =
-          (hoverAmt[itemHitId] || 0) +
-          ((isItemHov || isItemOpen ? 1 : 0) - (hoverAmt[itemHitId] || 0)) * 0.24;
-        const ihp = hoverAmt[itemHitId];
-
         const siblingDim =
           activeBranch === "me" && activeItem && activeItem !== id ? 0.52 : 1.0;
 
@@ -3719,7 +4426,7 @@
         ctx.globalAlpha = siblingDim;
         ctx.direction = rtl ? "rtl" : "ltr";
         ctx.textAlign = align;
-        ctx.textBaseline = "top";
+        ctx.textBaseline = "alphabetic";
 
         drawSkyTextFeather(
           (boxL + boxR) * 0.5,
@@ -3732,28 +4439,117 @@
         );
 
         let cy = mp.topY;
-        if (mp.item.meta) {
-          const metaP = clamp(tProg * 1.45, 0, 1);
-          if (metaP > 0.005) {
+        const headerAlpha = clamp(tProg * 1.65, 0, 1);
+
+        if (headerAlpha > 0.02) {
+          ctx.save();
+          ctx.globalAlpha *= headerAlpha;
+
+          const emblemCx = rtl ? boxR - 7 : boxL + 7;
+          const emblemCy = cy + 9.2;
+          drawProjectMicroEmblem(
+            mp.item.emblem || "crest",
+            emblemCx,
+            emblemCy,
+            isItemOpen || ihp > 0.15 ? CHALK_BRIGHT : CHALK,
+            ihp
+          );
+          lastMeProjectSubBoxes.push({
+            projectId: id,
+            part: "emblem",
+            left: emblemCx - 7,
+            right: emblemCx + 7,
+            top: cy + 2,
+            bottom: cy + 16.5
+          });
+
+          if (mp.badgeStr && mp.badgePillW > 0) {
+            const bLeft = rtl ? boxR - 22 - mp.badgePillW : boxL + 22;
+            const bTop = cy + 0.5;
+            const bH = 18.0;
+            drawRoundedCapsulePath(bLeft, bTop, mp.badgePillW, bH, 9);
+            ctx.fillStyle = isItemOpen || ihp > 0.15
+              ? "rgba(220, 224, 232, 0.15)"
+              : "rgba(198, 202, 210, 0.10)";
+            ctx.fill();
+            ctx.strokeStyle = isItemOpen || ihp > 0.15
+              ? "rgba(220, 224, 232, 0.72)"
+              : "rgba(154, 162, 178, 0.55)";
+            ctx.lineWidth = 0.9;
+            if (typeof ctx.setLineDash === "function") {
+              ctx.setLineDash([2.2, 2.2]);
+            }
+            ctx.stroke();
+            if (typeof ctx.setLineDash === "function") {
+              ctx.setLineDash([]);
+            }
+
             resetCanvasLetterSpacing();
-            const mSize = lang === "ar" || hasArabicChars(mp.item.meta) ? 11 : 10.3;
-            ctx.font = `500 ${mSize}px ${fontFamilyFor(mp.item.meta)}`;
-            drawDiscreteTextLine(
-              mp.item.meta,
-              metaP,
-              isItErasing,
-              textX,
-              cy,
-              CHALK_MUTED,
-              mSize,
-              1.0,
-              2.2
+            ctx.font = `500 ${mp.badgeFontPx}px ${fontFamilyFor(mp.badgeStr)}`;
+            ctx.direction = rtl || hasArabicChars(mp.badgeStr) ? "rtl" : "ltr";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            drawChalkText(
+              mp.badgeStr,
+              bLeft + mp.badgePillW * 0.5,
+              bTop + bH * 0.5 + 0.4,
+              isItemOpen || ihp > 0.15 ? CHALK_BRIGHT : CHALK,
+              mp.badgeFontPx,
+              1.0
             );
+            lastMeProjectSubBoxes.push({
+              projectId: id,
+              part: "badge",
+              left: bLeft,
+              right: bLeft + mp.badgePillW,
+              top: bTop,
+              bottom: bTop + bH
+            });
           }
-          cy += 14;
+
+          if (mp.metaStr) {
+            resetCanvasLetterSpacing();
+            ctx.font = `500 ${mp.metaFontPx}px ${fontFamilyFor(mp.metaStr)}`;
+            ctx.direction = rtl || hasArabicChars(mp.metaStr) ? "rtl" : "ltr";
+            ctx.textAlign = align;
+            ctx.textBaseline = "alphabetic";
+            if (mp.metaInline) {
+              const mX = rtl
+                ? boxR - 22 - mp.badgePillW - 12
+                : boxL + 22 + mp.badgePillW + 12;
+              const mBaseY = cy + 13.5;
+              drawChalkText(mp.metaStr, mX, mBaseY, CHALK_MUTED, mp.metaFontPx, 1.0);
+              const mLeft = rtl ? mX - mp.metaW : mX;
+              lastMeProjectSubBoxes.push({
+                projectId: id,
+                part: "meta",
+                left: mLeft,
+                right: mLeft + mp.metaW,
+                top: cy + 2,
+                bottom: cy + 17
+              });
+            } else {
+              const mBaseY = cy + 22 + 11.5;
+              drawChalkText(mp.metaStr, textX, mBaseY, CHALK_MUTED, mp.metaFontPx, 1.0);
+              const mLeft = rtl ? boxR - mp.metaW : boxL;
+              lastMeProjectSubBoxes.push({
+                projectId: id,
+                part: "meta",
+                left: mLeft,
+                right: mLeft + mp.metaW,
+                top: cy + 21,
+                bottom: cy + 36
+              });
+            }
+          }
+          ctx.restore();
         }
+        cy += mp.headerH;
 
         ctx.font = canvasFont("600 13.6px", mp.item.title);
+        ctx.direction = rtl ? "rtl" : "ltr";
+        ctx.textAlign = align;
+        ctx.textBaseline = "alphabetic";
         const titleCol = isItemHov || isItemOpen ? CHALK_BRIGHT : CHALK;
         const titleP = clamp((tProg - 0.05) / 0.50, 0, 1);
         const dispTitleLines = mp.titleLines.map((fullLine, lIdx) => {
@@ -3770,46 +4566,77 @@
           const take = titleCounts[lIdx] || 0;
           if (take > 0) {
             const drawnPart = dispLine.slice(0, take);
-            drawChalkText(drawnPart, textX, cy, titleCol, 13.6, 1.0);
+            const tBaseY = cy + 14.2;
             if (mp.bodyParas.length > 0 && ihp > 0.03 && drawnPart) {
               const corePart = drawnPart.slice(0, Math.min(drawnPart.length, fullLine.length));
               const lw = ctx.measureText(corePart).width;
               const uLeft = rtl ? textX - lw : textX;
               drawWavyUnderline(
                 uLeft,
-                cy + 15.2,
+                tBaseY + (rtl ? 10.6 : 6.6),
                 lw,
                 ihp,
                 idx * 4.3 + lIdx * 1.9,
                 CHALK_BRIGHT,
-                1.1,
+                1.12,
                 rtl
               );
             }
+            drawChalkText(drawnPart, textX, tBaseY, titleCol, 13.6, 1.0);
+            const fullDrawnW = Math.min(mp.projColW, ctx.measureText(drawnPart).width);
+            const tLeft = rtl ? boxR - fullDrawnW : boxL;
+            lastMeProjectSubBoxes.push({
+              projectId: id,
+              part: "title-" + lIdx,
+              left: tLeft,
+              right: tLeft + fullDrawnW,
+              top: cy + 1,
+              bottom: cy + mp.titleStepY - 1
+            });
           }
-          cy += 17.6;
+          cy += mp.titleStepY;
         });
 
         cy += 3;
         ctx.font = canvasFont("400 12.3px", mp.item.summary);
+        ctx.textBaseline = "top";
         const sumProg = clamp(((tProg - 0.26) / 0.64) * sumFactor, 0, 1);
+        const sumStartCy = cy;
         cy = drawDiscreteWrappedLines(
           mp.sumLines,
           sumProg,
           isItErasing,
           textX,
           cy,
-          15.8,
+          mp.sumStepY,
           CHALK,
           12.3,
           1.0
         );
+        if (sumProg > 0.05) {
+          mp.sumLines.forEach((sln, sIdx) => {
+            const sw = Math.min(mp.projColW, ctx.measureText(sln).width);
+            const sL = rtl ? boxR - sw : boxL;
+            const sTop = sumStartCy + sIdx * mp.sumStepY;
+            lastMeProjectSubBoxes.push({
+              projectId: id,
+              part: "sum-" + sIdx,
+              left: sL,
+              right: sL + sw,
+              top: sTop + 1,
+              bottom: sTop + mp.sumStepY - 1
+            });
+          });
+        }
 
         if (activeBranch === "me") {
           const stl = worldToScreen(boxL, mp.topY);
           const sbr = worldToScreen(boxR, cy);
           lastMeProjectsScreenBoxes.push({
             id,
+            category: mp.item.category || "all",
+            emblem: mp.item.emblem || "crest",
+            impactBadge: mp.badgeStr,
             title: mp.item.title,
             screenLeft: stl.x,
             screenRight: sbr.x,
@@ -3834,7 +4661,6 @@
         ctx.restore();
       }
 
-      // Level-2 Expanded Project Shoot & Details inside me
       const s2Raw = lvl2ShootGrow[id] || 0;
       const dTypeProg = lvl2Type[id] || 0;
       const isD2Erasing = Boolean(lvl2Erasing[id]);
@@ -3843,14 +4669,14 @@
         const s2X = mp.lvl2StartX + canopySway * 0.2;
         const s2Y = nodeY;
         const e2X = mp.lvl2TipX + canopySway * 0.15;
-        const e2Y = mp.lvl2TopY + 18;
+        const e2Y = mp.lvl2TopY + 10;
 
         const endShoot = drawGrowingShoot(
           s2X,
           s2Y,
-          s2X + 24,
+          s2X + 22,
           s2Y + (e2Y - s2Y) * 0.32,
-          e2X - 24,
+          e2X - 22,
           e2Y,
           e2X,
           e2Y,
@@ -3862,7 +4688,7 @@
         );
 
         if (tuftBuffer && itProg > 0.42) {
-          const ts2 = smoothstep(0.42, 1.0, itProg) * 26;
+          const ts2 = smoothstep(0.42, 1.0, itProg) * 24;
           ctx.save();
           ctx.globalAlpha = smoothstep(0.42, 1.0, itProg) * 0.88;
           ctx.drawImage(
@@ -3886,7 +4712,7 @@
           ctx.globalAlpha = 1.0;
           ctx.direction = rtl ? "rtl" : "ltr";
           ctx.textAlign = align;
-          ctx.textBaseline = "top";
+          ctx.textBaseline = "alphabetic";
 
           drawSkyTextFeather(
             (dBoxL + dBoxR) * 0.5,
@@ -3907,29 +4733,29 @@
             const colSize = lang === "ar" || hasArabicChars(d.collapseNote) ? 11.5 : 11;
             ctx.font = `500 ${colSize}px ${fontFamilyFor(d.collapseNote)}`;
             const fullCollapseW = Math.max(1, ctx.measureText(d.collapseNote).width);
-            const typedCollapse = drawDiscreteTextLine(
-              d.collapseNote,
-              colP,
-              isD2Erasing,
-              dTextX,
-              dcy,
-              closeHov ? CHALK_BRIGHT : CHALK_MUTED,
-              colSize,
-              1.0,
-              1.8
-            );
-            if (typedCollapse) {
+            const colCnt = computeDiscreteCharCount(d.collapseNote, colP, isD2Erasing, 1.8);
+            if (colCnt > 0) {
+              const typedCollapse = d.collapseNote.slice(0, colCnt);
               const cw = ctx.measureText(typedCollapse).width;
               const uLeft = rtl ? dTextX - fullCollapseW : dTextX;
+              const colBaseY = dcy + 12.5;
               drawWavyUnderline(
                 uLeft,
-                dcy + 14,
+                colBaseY + (rtl ? 10.6 : 6.6),
                 fullCollapseW,
                 clamp((cw / fullCollapseW) * (closeHov ? 1.0 : 0.72), 0, 1),
                 idx * 2.3 + 4.1,
                 closeHov ? CHALK_BRIGHT : "rgba(154, 162, 178, 0.68)",
-                1.0,
+                1.05,
                 rtl
+              );
+              drawChalkText(
+                typedCollapse,
+                dTextX,
+                colBaseY,
+                closeHov ? CHALK_BRIGHT : CHALK_MUTED,
+                colSize,
+                1.0
               );
               if (activeItem === id) {
                 worldHitboxes.push({
@@ -3938,27 +4764,34 @@
                   branchKey: "me",
                   itemId: id,
                   x: uLeft - 6,
-                  y: dcy - 4,
+                  y: dcy - 2,
                   w: fullCollapseW + 12,
-                  h: 20
+                  h: 25
                 });
               }
             }
           }
-          dcy += 22;
+          dcy += rtl ? 30 : 25;
 
+          ctx.textBaseline = "top";
           const allLines = [];
           mp.bodyParas.forEach((pLines, pIdx) => {
             pLines.forEach((line, lIdx) => {
               allLines.push({
                 text: line,
                 kind: "body",
-                afterGap: lIdx === pLines.length - 1 ? 9 : 0
+                afterGap: lIdx === pLines.length - 1 ? 9 : 0,
+                key: `${pIdx}:${lIdx}`
               });
             });
           });
-          mp.tagLines.forEach((tl) => {
-            allLines.push({ text: tl, kind: "tag", afterGap: 0 });
+          mp.tagLines.forEach((tl, tIdx) => {
+            allLines.push({
+              text: tl,
+              kind: "tag",
+              afterGap: 0,
+              key: `tag:${tIdx}`
+            });
           });
 
           const bodyRawP = clamp((dTypeProg - 0.05) / 0.95, 0, 1);
@@ -3983,8 +4816,97 @@
                 drawChalkText(sub, dTextX, dcy, CHALK_MUTED, tgSize, 1.0);
               }
             }
-            dcy += (ln.kind === "body" ? 18.8 : 15.5) + ln.afterGap;
+            dcy += (ln.kind === "body" ? (rtl ? 20.2 : 18.8) : 16.0) + ln.afterGap;
           });
+
+          if (mp.actionRows && mp.actionRows.length > 0) {
+            dcy += 8;
+            const actLinksProg = clamp((dTypeProg - 0.30) / 0.70, 0, 1);
+            mp.actionRows.forEach((row, rIdx) => {
+              row.items.forEach((entry) => {
+                const { act, aIdx, offsetX } = entry;
+                const localActP = clamp(
+                  (actLinksProg - aIdx * 0.08) / Math.max(0.28, 1 - aIdx * 0.08),
+                  0,
+                  1
+                );
+                if (localActP <= 0.01) return;
+
+                resetCanvasLetterSpacing();
+                ctx.font = canvasFont("500 12.4px", act.label);
+                const fullActW = Math.min(
+                  mp.projDetailW,
+                  Math.max(1, ctx.measureText(act.label).width)
+                );
+                const actHitId = `projact:${id}:${aIdx}`;
+                const actHov = hoveredHit && hoveredHit.id === actHitId;
+                const actRight = rtl ? dBoxR - offsetX : dBoxL + offsetX + fullActW;
+                const actLeft = rtl ? actRight - fullActW : dBoxL + offsetX;
+                const actAnchorX = rtl ? actRight : actLeft;
+                const isArAct = hasArabicChars(act.label);
+                ctx.direction = isArAct ? "rtl" : "ltr";
+                ctx.textAlign = rtl ? "right" : "left";
+                ctx.textBaseline = "alphabetic";
+                const actBaseY = dcy + 13.5;
+                const actUnderY = actBaseY + ((rtl || isArAct) ? 10.6 : 6.8);
+
+                const visCnt = computeDiscreteCharCount(act.label, localActP, isD2Erasing, 2.0);
+                if (visCnt > 0) {
+                  const typedAct = act.label.slice(0, visCnt);
+                  const typedW = ctx.measureText(typedAct).width;
+                  drawWavyUnderline(
+                    actLeft,
+                    actUnderY,
+                    fullActW,
+                    clamp(typedW / fullActW, 0, 1),
+                    idx * 3.9 + aIdx * 2.3 + rIdx + 1.4,
+                    actHov ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.90)",
+                    actHov ? 1.25 : 1.15,
+                    rtl
+                  );
+                  drawChalkText(
+                    typedAct,
+                    actAnchorX,
+                    actBaseY,
+                    actHov ? CHALK_BRIGHT : CHALK_BRIGHT,
+                    12.4,
+                    1.0
+                  );
+
+                  if (activeBranch === "me" && activeItem === id && localActP > 0.30) {
+                    const hitBox = {
+                      id: actHitId,
+                      kind: "action",
+                      itemId: id,
+                      action: act,
+                      x: actLeft - 6,
+                      y: actBaseY - 15,
+                      w: fullActW + 12,
+                      h: (actUnderY - (actBaseY - 15)) + 6
+                    };
+                    worldHitboxes.push(hitBox);
+                    const atl = worldToScreen(actLeft, actBaseY - 14);
+                    const abr = worldToScreen(actRight, actUnderY + 3);
+                    lastMeProjectActionBoxes.push({
+                      itemId: id,
+                      label: act.label,
+                      href: act.href || act.url || null,
+                      baselineY: actBaseY,
+                      underlineY: actUnderY,
+                      deltaY: actUnderY - actBaseY,
+                      worldLeft: actLeft,
+                      worldRight: actRight,
+                      screenLeft: atl.x,
+                      screenRight: abr.x,
+                      screenTop: atl.y,
+                      screenBottom: abr.y
+                    });
+                  }
+                }
+              });
+              dcy += mp.actionRowH;
+            });
+          }
 
           ctx.restore();
         }
@@ -4003,6 +4925,24 @@
     const expLay = computeExperienceBoughLayout(bCfg);
     const G = expLay.geom;
     const baseSway = computeCanopySway(G.y0, timeSec);
+
+    function recordExpTextBox(kind, id, text, worldLeft, worldRight, worldTop, worldBottom) {
+      const scrTL = worldToScreen(worldLeft, worldTop);
+      const scrBR = worldToScreen(worldRight, worldBottom);
+      lastExpTextLineBoxes.push({
+        kind,
+        id,
+        text,
+        worldLeft,
+        worldRight,
+        worldTop,
+        worldBottom,
+        screenLeft: scrTL.x,
+        screenRight: scrBR.x,
+        screenTop: scrTL.y,
+        screenBottom: scrBR.y
+      });
+    }
 
     function boughPointAt(u) {
       const swayMul = 1 + u * 0.55;
@@ -4030,6 +4970,23 @@
       const sc = 0.56 + 0.44 * bloom;
       const dw = puff.drawW * sc;
       const dh = puff.drawH * sc;
+
+      const spec = EXP_PUFF_SPECS[pIdx];
+      if (spec) {
+        const scrC = worldToScreen(cx, cy);
+        lastExpLeafPuffCircles.push({
+          pIdx,
+          t: puff.t,
+          cx,
+          cy,
+          rx: spec.rx * sc,
+          ry: spec.ry * sc,
+          effRx: spec.rx * 1.15 * sc,
+          effRy: spec.ry * 1.15 * sc,
+          screenCx: scrC.x,
+          screenCy: scrC.y
+        });
+      }
 
       ctx.save();
       ctx.globalAlpha = bloom;
@@ -4065,7 +5022,7 @@
       prevPt = nextPt;
     }
 
-    // Slender outer forked tip + tiny detached botanical leaf-flecks (matching 2D03B4ED!)
+    // Slender outer forked tip + tiny detached botanical leaf-flecks
     if (expBoughGrow > 0.92) {
       const tipP = smoothstep(0.92, 1.0, expBoughGrow);
       const forkBase = boughPointAt(0.955);
@@ -4084,13 +5041,90 @@
       if (puff.fg) drawPuffCluster(puff, pIdx);
     });
 
-    // 4. 5 Alternating Year Twigs + Typewriter Year Labels + Level-2 Secondary Role Shoots
+    // 3b. Subtle uncluttered collar sprig & active branch title ("الخبرات المهنية." / "experience.")
+    if (expBoughGrow > 0.08) {
+      const collarP = easeOutCubic(clamp((expBoughGrow - 0.08) / 0.28, 0, 1));
+      const collarSway = baseSway * 1.05;
+      const csx = expLay.collarStartX + collarSway;
+      const csy = expLay.collarStartY;
+      const ctxTip = expLay.collarTipX + collarSway;
+      const ctyTip = expLay.collarTipY;
+      const collarDim = activeItem ? 0.48 : 0.94;
+      const menuHitId = "menu:experience";
+      const isMenuHov = hoveredHit && hoveredHit.id === menuHitId;
+
+      ctx.save();
+      ctx.globalAlpha = collarDim * collarP;
+      drawGrowingShoot(
+        csx,
+        csy,
+        csx + (ctxTip - csx) * 0.38,
+        csy + (ctyTip - csy) * 0.35 + 2.0,
+        csx + (ctxTip - csx) * 0.74,
+        csy + (ctyTip - csy) * 0.72 + 1.0,
+        ctxTip,
+        ctyTip,
+        collarP,
+        1.65,
+        1.0,
+        isMenuHov ? CHALK_BRIGHT : CHALK_MUTED,
+        6.4
+      );
+
+      const titleText = `${bCfg.label}.`;
+      const visTitle = computeDiscreteCharCount(titleText, collarP, activeBranch !== "experience", 2.0);
+      if (visTitle > 0) {
+        resetCanvasLetterSpacing();
+        ctx.font = canvasFont("600 14.5px", titleText);
+        ctx.direction = rtl ? "rtl" : "ltr";
+        ctx.textBaseline = "middle";
+        const fullTW = ctx.measureText(titleText).width;
+        const tLeft = ctxTip + 12;
+        const tRight = tLeft + fullTW;
+        ctx.textAlign = rtl ? "right" : "left";
+        const tAnchor = rtl ? tRight : tLeft;
+        const subTitle = titleText.slice(0, visTitle);
+
+        drawWavyUnderline(
+          tLeft,
+          ctyTip + (rtl ? 15.8 : 11.4),
+          fullTW,
+          collarP * 0.92,
+          17.3,
+          "rgba(220, 224, 232, 0.84)",
+          1.18,
+          rtl
+        );
+        drawChalkText(subTitle, tAnchor, ctyTip, isMenuHov ? CHALK_BRIGHT : CHALK_BRIGHT, 14.5, 1.0);
+        recordExpTextBox("branch-title", "experience", subTitle, tLeft, tRight, ctyTip - 8, ctyTip + 10);
+
+        if (activeBranch === "experience" && collarP > 0.35) {
+          worldHitboxes.push({
+            id: menuHitId,
+            kind: "branch",
+            branchKey: "experience",
+            x: Math.min(csx, tLeft) - 8,
+            y: ctyTip - 16,
+            w: (tRight - Math.min(csx, tLeft)) + 16,
+            h: 32
+          });
+        }
+      }
+      ctx.restore();
+    }
+
+    // 4. 6 Chronological Alternating Year Twigs + Typewriter Year Labels + Level-2 Secondary Role Shoots
     expLay.yearNodes.forEach((yn, idx) => {
       const id = yn.item.id;
       const stRaw = subTwigGrow[id] || 0;
       const stProg = easeOutCubic(stRaw);
       const tProg = itemType[id] || 0;
       const isItErasing = Boolean(itemErasing[id]);
+
+      const hitId = "item:" + id;
+      const isHov = hoveredHit && hoveredHit.id === hitId;
+      const isOpen = activeItem === id;
+      const siblingDim = activeItem && !isOpen ? 0.48 : 1.0;
 
       const swayX = baseSway * (1 + yn.t * 0.55);
       const swayY = Math.sin(timeSec * 0.76 + yn.t * 2.4) * (1.2 * yn.t);
@@ -4099,8 +5133,10 @@
       const sx3 = yn.tipX + swayX;
       const sy3 = yn.tipY + swayY;
 
-      // Short slender side-twig (36-42px) with 3 tiny teardrop leaf buds
+      // Short slender side-twig with 3 tiny teardrop leaf buds (dimmed to 0.48 when a sibling year is open)
       if (stProg > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = siblingDim;
         const midX1 = sx0 + (sx3 - sx0) * 0.35;
         const midY1 = sy0 + (sy3 - sy0) * 0.35 - 2.2;
         const midX2 = sx0 + (sx3 - sx0) * 0.72;
@@ -4117,15 +5153,13 @@
           stProg,
           1.75,
           1.05,
-          activeItem === id ? CHALK_BRIGHT : CHALK,
+          isOpen ? CHALK_BRIGHT : CHALK,
           idx * 3.3 + 1.8
         );
+        ctx.restore();
       }
 
       if (tProg > 0.005) {
-        const hitId = "item:" + id;
-        const isHov = hoveredHit && hoveredHit.id === hitId;
-        const isOpen = activeItem === id;
         hoverAmt[hitId] =
           (hoverAmt[hitId] || 0) + ((isHov || isOpen ? 1 : 0) - (hoverAmt[hitId] || 0)) * 0.24;
         const hp = hoverAmt[hitId];
@@ -4133,7 +5167,6 @@
         const dispText = isOpen ? yn.activeText : yn.rawLabel;
         const visCount = computeDiscreteCharCount(dispText, tProg, isItErasing, 2.0);
         if (visCount > 0) {
-          const siblingDim = activeItem && !isOpen ? 0.58 : 1.0;
           ctx.save();
           ctx.globalAlpha = siblingDim;
           resetCanvasLetterSpacing();
@@ -4141,8 +5174,11 @@
           ctx.direction = rtl ? "rtl" : "ltr";
           ctx.textBaseline = "middle";
 
+          // Strict Bug Check A span:
+          // - lower-right / outer-tip: [tx + 12, tx + 12 + labelWidth]
+          // - upper-left: [tx - 12 - labelWidth, tx - 12]
           const measuredFullW = ctx.measureText(dispText).width;
-          const bLeft = yn.isRightSide ? sx3 + 10 : sx3 - 10 - measuredFullW;
+          const bLeft = yn.isRightSide ? sx3 + 12 : sx3 - 12 - measuredFullW;
           const bRight = bLeft + measuredFullW;
           const ly = yn.labelY + swayY;
 
@@ -4160,6 +5196,23 @@
           ctx.textAlign = alignRight ? "right" : "left";
           const anchorX = alignRight ? bRight : bLeft;
           const subStr = dispText.slice(0, visCount);
+          const subW = ctx.measureText(subStr).width;
+          const actualLeft = alignRight ? anchorX - subW : anchorX;
+          const actualRight = alignRight ? anchorX : anchorX + subW;
+
+          const uWave = isOpen ? 1.0 : hp * 0.92;
+          if (uWave > 0.02) {
+            drawWavyUnderline(
+              bLeft,
+              ly + (rtl || hasArabicChars(dispText) ? 15.8 : 11.4),
+              measuredFullW,
+              uWave * clamp(tProg * 1.2, 0, 1),
+              idx * 4.7 + 2.3,
+              isOpen ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.86)",
+              isOpen ? 1.22 : 1.08,
+              rtl
+            );
+          }
 
           drawChalkText(
             subStr,
@@ -4170,19 +5223,7 @@
             1.0
           );
 
-          const uWave = isOpen ? 1.0 : hp * 0.92;
-          if (uWave > 0.02) {
-            drawWavyUnderline(
-              bLeft,
-              ly + 10.5,
-              measuredFullW,
-              uWave * clamp(tProg * 1.2, 0, 1),
-              idx * 4.7 + 2.3,
-              isOpen ? CHALK_BRIGHT : "rgba(220, 224, 232, 0.86)",
-              isOpen ? 1.35 : 1.1,
-              rtl
-            );
-          }
+          recordExpTextBox("year-label", id, subStr, actualLeft, actualRight, ly - 8.5, ly + 8.5);
           ctx.restore();
 
           if (activeBranch === "experience") {
@@ -4190,6 +5231,15 @@
             const scrBR = worldToScreen(bRight, ly + 11);
             lastExpYearScreenBoxes.push({
               id,
+              idx,
+              side: yn.side,
+              isOuterTip: yn.isOuterTip,
+              tipX: sx3,
+              tipY: sy3,
+              worldLeft: bLeft,
+              worldRight: bRight,
+              worldTop: ly - 10,
+              worldBottom: ly + 11,
               yearLabel: dispText,
               screenLeft: scrTL.x,
               screenRight: scrBR.x,
@@ -4221,18 +5271,18 @@
         const itProg = easeOutCubic(s2Raw);
         const s2X = yn.s2StartX + swayX;
         const s2Y = yn.s2StartY + swayY;
-        const e2X = yn.s2TipX + swayX * 0.65;
-        const e2Y = yn.cardTopY + 18;
+        const shootEndX = yn.s2TipX + swayX * 0.65;
+        const shootEndY = yn.cardTopY + 8;
 
         const endShoot = drawGrowingShoot(
           s2X,
           s2Y,
           s2X + yn.shootDir * 24,
-          s2Y + (e2Y - s2Y) * 0.35,
-          e2X - yn.shootDir * 24,
-          e2Y,
-          e2X,
-          e2Y,
+          s2Y + (shootEndY - s2Y) * 0.35,
+          shootEndX - yn.shootDir * 24,
+          shootEndY,
+          shootEndX,
+          shootEndY,
           itProg,
           1.8,
           1.15,
@@ -4241,9 +5291,9 @@
         );
 
         if (tuftBuffer && itProg > 0.42) {
-          const ts2 = smoothstep(0.42, 1.0, itProg) * 26;
+          const ts2 = smoothstep(0.42, 1.0, itProg) * 24;
           ctx.save();
-          ctx.globalAlpha = smoothstep(0.42, 1.0, itProg) * 0.88;
+          ctx.globalAlpha = smoothstep(0.42, 1.0, itProg) * 0.86;
           ctx.drawImage(
             tuftBuffer,
             endShoot.endX - ts2 * 0.5,
@@ -4255,8 +5305,12 @@
         }
 
         if (dTypeProg > 0.004) {
-          const cLeft = yn.cardLeft + swayX * 0.65;
-          const cRight = yn.cardRight + swayX * 0.65;
+          // Strict Bug Check B outward card bounds:
+          // - side === "right": [shootEndX + 18 .. shootEndX + 18 + colW]
+          // - side === "left":  [shootEndX - 18 - colW .. shootEndX - 18]
+          const colW = yn.detailColWidth;
+          const cLeft = yn.shootDir > 0 ? shootEndX + 18 : shootEndX - 18 - colW;
+          const cRight = cLeft + colW;
           const cTextX = rtl ? cRight : cLeft;
 
           ctx.save();
@@ -4271,7 +5325,7 @@
             Math.max(125, yn.detailH * 0.88) * clamp(dTypeProg * 1.3, 0.25, 1),
             cLeft - 26,
             yn.cardTopY - 18,
-            yn.detailColWidth + 52,
+            colW + 52,
             yn.detailH + 36
           );
 
@@ -4283,30 +5337,67 @@
             const colSize = lang === "ar" || hasArabicChars(d.collapseNote) ? 11.5 : 11;
             ctx.font = `500 ${colSize}px ${fontFamilyFor(d.collapseNote)}`;
             const fullCollapseW = Math.max(1, ctx.measureText(d.collapseNote).width);
-            const typedCollapse = drawDiscreteTextLine(
-              d.collapseNote,
-              colP,
-              isD2Erasing,
-              cTextX,
-              dcy,
-              closeHov ? CHALK_BRIGHT : CHALK_MUTED,
-              colSize,
-              1.0,
-              1.8
-            );
+
+            // Delicate subtle chalk stem/connector across the header when text aligns to the far edge of the card
+            // (e.g., Arabic RTL on rightward shoot, or English LTR on leftward shoot)
+            if ((yn.shootDir > 0 && rtl) || (yn.shootDir < 0 && !rtl)) {
+              const stemFromX = yn.shootDir > 0 ? shootEndX + 8 : shootEndX - 8;
+              const stemTargetX = yn.shootDir > 0
+                ? Math.max(cLeft + 4, cRight - fullCollapseW - 12)
+                : Math.min(cRight - 4, cLeft + fullCollapseW + 12);
+              if (Math.abs(stemTargetX - stemFromX) > 12) {
+                const stemCurX = stemFromX + (stemTargetX - stemFromX) * colP;
+                const stemY = dcy + 7.5;
+                ctx.save();
+                ctx.strokeStyle = "rgba(198, 202, 210, 0.42)";
+                ctx.lineWidth = 0.95;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(stemFromX, stemY);
+                ctx.quadraticCurveTo(
+                  (stemFromX + stemCurX) * 0.5,
+                  stemY - 1.8,
+                  stemCurX,
+                  stemY
+                );
+                ctx.stroke();
+                if (colP > 0.55) {
+                  drawTeardropBud(
+                    ctx,
+                    stemFromX + (stemCurX - stemFromX) * 0.46,
+                    stemY - 1.6,
+                    3.1,
+                    1.35,
+                    yn.shootDir > 0 ? -0.32 : Math.PI + 0.32,
+                    "rgba(198, 202, 210, 0.50)"
+                  );
+                  ctx.fillStyle = "rgba(220, 224, 232, 0.52)";
+                  ctx.beginPath();
+                  ctx.arc(stemCurX, stemY, 1.25, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+                ctx.restore();
+              }
+            }
+
+            const expColCnt = computeDiscreteCharCount(d.collapseNote, colP, isD2Erasing, 1.8);
+            const typedCollapse = expColCnt > 0 ? d.collapseNote.slice(0, expColCnt) : "";
             if (typedCollapse) {
               const cw = ctx.measureText(typedCollapse).width;
               const uLeft = rtl ? cTextX - fullCollapseW : cTextX;
+              const drawnLeft = rtl ? cTextX - cw : cTextX;
               drawWavyUnderline(
                 uLeft,
-                dcy + 14,
+                dcy + (rtl ? 22.8 : 18.6),
                 fullCollapseW,
                 clamp((cw / fullCollapseW) * (closeHov ? 1.0 : 0.72), 0, 1),
                 idx * 2.7 + 3.9,
                 closeHov ? CHALK_BRIGHT : "rgba(154, 162, 178, 0.68)",
-                1.0,
+                1.05,
                 rtl
               );
+              drawChalkText(typedCollapse, cTextX, dcy, closeHov ? CHALK_BRIGHT : CHALK_MUTED, colSize, 1.0);
+              recordExpTextBox("card-collapse", id, typedCollapse, drawnLeft, drawnLeft + cw, dcy, dcy + colSize + 3);
               if (activeItem === id) {
                 worldHitboxes.push({
                   id: closeId,
@@ -4321,7 +5412,7 @@
               }
             }
           }
-          dcy += 24;
+          dcy += rtl ? 29 : 26;
 
           // Build flat line schedule across all roles & bullets in this year node
           const flatRoleLines = [];
@@ -4331,7 +5422,7 @@
                 text: ml,
                 kind: "meta",
                 indent: 0,
-                stepY: 15.5 + (mIdx === mr.metaLines.length - 1 ? 2 : 0)
+                stepY: 16.5 + (mIdx === mr.metaLines.length - 1 ? 3 : 0)
               });
             });
             mr.roleLines.forEach((rl, rlIdx) => {
@@ -4341,7 +5432,7 @@
                 indent: 0,
                 isLastRoleLine: rlIdx === mr.roleLines.length - 1,
                 roleIdx: rIdx,
-                stepY: 18.2 + (rlIdx === mr.roleLines.length - 1 ? 5 : 0)
+                stepY: 19.5 + (rlIdx === mr.roleLines.length - 1 ? (rtl ? 11.5 : 7.5) : 0)
               });
             });
             mr.bulletLines.forEach((bl, bIdx) => {
@@ -4370,33 +5461,41 @@
             if (take > 0) {
               const sub = fl.text.slice(0, take);
               const xDraw = rtl ? cTextX - fl.indent : cTextX + fl.indent;
+              let lineFontPx = 12.6;
               if (fl.kind === "meta") {
                 resetCanvasLetterSpacing();
                 const ms = lang === "ar" || hasArabicChars(fl.text) ? 11.4 : 10.8;
+                lineFontPx = ms;
                 ctx.font = `500 ${ms}px ${fontFamilyFor(fl.text)}`;
                 drawChalkText(sub, xDraw, dcy, CHALK_MUTED, ms, 1.0);
               } else if (fl.kind === "role") {
+                lineFontPx = 13.8;
                 ctx.font = canvasFont("600 13.8px", fl.text);
-                drawChalkText(sub, xDraw, dcy, CHALK_BRIGHT, 13.8, 1.0);
                 if (fl.isLastRoleLine) {
                   const fullRoleW = Math.max(1, ctx.measureText(fl.text).width);
                   const subW = ctx.measureText(sub).width;
                   const uL = rtl ? xDraw - fullRoleW : xDraw;
                   drawWavyUnderline(
                     uL,
-                    dcy + 15.8,
+                    dcy + (rtl ? 24.8 : 20.6),
                     fullRoleW,
                     clamp(subW / fullRoleW, 0, 1) * 0.78,
                     idx * 3.1 + fl.roleIdx * 2.2,
                     "rgba(220, 224, 232, 0.72)",
-                    1.0,
+                    1.05,
                     rtl
                   );
                 }
+                drawChalkText(sub, xDraw, dcy, CHALK_BRIGHT, 13.8, 1.0);
               } else {
+                lineFontPx = 12.6;
                 ctx.font = canvasFont("400 12.6px", fl.text);
                 drawChalkText(sub, xDraw, dcy, CHALK, 12.6, 1.0);
               }
+
+              const subLineW = Math.min(colW - fl.indent, ctx.measureText(sub).width);
+              const lineLeft = rtl ? xDraw - subLineW : xDraw;
+              recordExpTextBox("card-" + fl.kind, id, sub, lineLeft, lineLeft + subLineW, dcy, dcy + lineFontPx + 3);
 
               if (fl.hasDividerAfter && take >= fl.text.length) {
                 const divY = dcy + 22;
@@ -4616,15 +5715,13 @@
               const take = titleCounts[lIdx] || 0;
               if (take > 0) {
                 const drawnPart = dispLine.slice(0, take);
-                drawChalkText(drawnPart, textX, cy, titleCol, 13.6, 1.0);
-
                 if (mi.bodyParas.length > 0 && ihp > 0.03 && drawnPart) {
                   const corePart = drawnPart.slice(0, Math.min(drawnPart.length, fullLine.length));
                   const lw = ctx.measureText(corePart).width;
                   const uLeft = rtl ? textX - lw : textX;
                   drawWavyUnderline(
                     uLeft,
-                    cy + 15.2,
+                    cy + (rtl ? 24.4 : 19.8),
                     lw,
                     ihp,
                     idx * 4.3 + lIdx * 1.9,
@@ -4633,8 +5730,9 @@
                     rtl
                   );
                 }
+                drawChalkText(drawnPart, textX, cy, titleCol, 13.6, 1.0);
               }
-              cy += 17.4;
+              cy += rtl ? 24.5 : 20.0;
             });
 
             cy += 2.5;
@@ -4646,7 +5744,7 @@
               isItErasing,
               textX,
               cy,
-              15.8,
+              rtl ? 18.5 : 16.2,
               CHALK,
               12.3,
               1.0
@@ -4687,31 +5785,22 @@
                   ctx.direction = hasArabicChars(act.label) ? "rtl" : "ltr";
                   ctx.textAlign = rtl ? "right" : "left";
 
-                  const typedAct = drawDiscreteTextLine(
-                    act.label,
-                    localLinkP,
-                    isItErasing,
-                    actAnchorX,
-                    cy,
-                    actHov ? CHALK_BRIGHT : CHALK,
-                    12,
-                    1.0,
-                    2.0
-                  );
-                  if (!typedAct) return;
-
+                  const actVisCnt = computeDiscreteCharCount(act.label, localLinkP, isItErasing, 2.0);
+                  if (actVisCnt <= 0) return;
+                  const typedAct = act.label.slice(0, actVisCnt);
                   const typedW = ctx.measureText(typedAct).width;
                   const actUProg = clamp(typedW / Math.max(1, tw), 0, 1);
                   drawWavyUnderline(
                     actLeft,
-                    cy + 15.2,
+                    cy + (rtl || hasArabicChars(act.label) ? 22.8 : 18.6),
                     tw,
                     actUProg,
                     aIdx * 3.1 + rIdx * 1.7 + 0.8,
                     actHov ? CHALK_BRIGHT : "rgba(198, 202, 210, 0.82)",
-                    actHov ? 1.3 : 1.05,
+                    actHov ? 1.22 : 1.05,
                     rtl
                   );
+                  drawChalkText(typedAct, actAnchorX, cy, actHov ? CHALK_BRIGHT : CHALK, 12, 1.0);
 
                   if (activeBranch === key && localLinkP > 0.35) {
                     worldHitboxes.push({
@@ -4804,30 +5893,22 @@
                 const colSize = lang === "ar" || hasArabicChars(d.collapseNote) ? 11.5 : 11;
                 ctx.font = `500 ${colSize}px ${fontFamilyFor(d.collapseNote)}`;
                 const fullCollapseW = Math.max(1, ctx.measureText(d.collapseNote).width);
-                const typedCollapse = drawDiscreteTextLine(
-                  d.collapseNote,
-                  colP,
-                  isD2Erasing,
-                  dTextX,
-                  dcy,
-                  closeHov ? CHALK_BRIGHT : CHALK_MUTED,
-                  colSize,
-                  1.0,
-                  1.8
-                );
+                const wkColCnt = computeDiscreteCharCount(d.collapseNote, colP, isD2Erasing, 1.8);
+                const typedCollapse = wkColCnt > 0 ? d.collapseNote.slice(0, wkColCnt) : "";
                 if (typedCollapse) {
                   const cw = ctx.measureText(typedCollapse).width;
                   const uLeft = rtl ? dTextX - fullCollapseW : dTextX;
                   drawWavyUnderline(
                     uLeft,
-                    dcy + 14,
+                    dcy + (rtl ? 22.8 : 18.6),
                     fullCollapseW,
                     clamp((cw / fullCollapseW) * (closeHov ? 1.0 : 0.72), 0, 1),
                     idx * 2.3 + 4.1,
                     closeHov ? CHALK_BRIGHT : "rgba(154, 162, 178, 0.68)",
-                    1.0,
+                    1.05,
                     rtl
                   );
+                  drawChalkText(typedCollapse, dTextX, dcy, closeHov ? CHALK_BRIGHT : CHALK_MUTED, colSize, 1.0);
                   if (activeItem === id) {
                     worldHitboxes.push({
                       id: closeId,
@@ -4842,7 +5923,7 @@
                   }
                 }
               }
-              dcy += 22;
+              dcy += rtl ? 28 : 25;
 
               const allLines = [];
               mi.bodyParas.forEach((pLines, pIdx) => {
@@ -4896,7 +5977,11 @@
       }
 
       // Clean, nearly-straight gently-tapering canopy shoot (2.3px -> 1.3px) angled 3°-8° with 4 alternating teardrop buds!
-      if (twigProg > 0.01) {
+      // For "experience", smoothly blend out the resting horizontal shoot as the arching bough emerges (zero clash!)
+      const expRestingFade = key === "experience" ? clamp(1 - (expBoughGrow - 0.02) / 0.14, 0, 1) : 1.0;
+      if (twigProg > 0.01 && expRestingFade > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = expRestingFade;
         const stretch = limbRaw < 0.05 ? hp * 4 : 0;
         const curTipX = tipX + dir * stretch;
         const twigColor = hp > 0.1 || limbRaw > 0.05 ? CHALK_BRIGHT : CHALK;
@@ -4958,24 +6043,23 @@
             ctx.textAlign = alignRight ? "right" : "left";
             const labelCol = hp > 0.1 || isSelected ? CHALK_BRIGHT : CHALK;
             const subLabel = baseText.slice(0, visCount);
-            drawChalkText(subLabel, drawAnchorX, labelLiftY, labelCol, 15, 1.0);
-
             const waveP = Math.max(uProg, hp * 0.85 * labelTypeProg);
             if (waveP > 0.02) {
               drawWavyUnderline(
                 lineLeft,
-                labelLiftY + 10.5,
+                labelLiftY + (rtl ? 16.0 : 11.6),
                 fullW,
                 waveP,
                 key.charCodeAt(0) * 0.7,
                 isSelected ? CHALK_BRIGHT : "rgba(198, 202, 210, 0.82)",
-                isSelected ? 1.3 : 1.05,
+                isSelected ? 1.22 : 1.05,
                 rtl
               );
             }
+            drawChalkText(subLabel, drawAnchorX, labelLiftY, labelCol, 15, 1.0);
             ctx.restore();
 
-            if (!activeBranch || activeBranch === key) {
+            if (!activeBranch || (activeBranch === key && key !== "experience")) {
               const hbLeft = dir < 0 ? labelAnchorX - fullW - 12 : Math.min(ax, labelAnchorX) - 6;
               const hbRight = dir < 0 ? Math.max(ax, labelAnchorX) + 6 : labelAnchorX + fullW + 12;
               worldHitboxes.push({
@@ -4990,6 +6074,7 @@
             }
           }
         }
+        ctx.restore();
       }
     });
   }
@@ -5492,6 +6577,12 @@
         mainLabelErasing[k] = mainLabelType[k] > labelGoal;
         mainLabelType[k] = approach(mainLabelType[k], labelGoal, labelRateUp, labelRateDown, dt);
         underlineProg[k] = approach(underlineProg[k], 0, 3.2, 4.1, dt);
+      } else if (isSelected && k === "experience") {
+        // Smoothly retract horizontal resting label/twig as the arching experience bough takes over
+        mainLabelErasing[k] = mainLabelType[k] > 0;
+        mainLabelType[k] = approach(mainLabelType[k], 0, labelRateUp, labelRateDown * 1.4, dt);
+        mainTwigGrow[k] = approach(mainTwigGrow[k], mainLabelType[k] > 0.15 ? 1 : 0, 3.6, 4.2, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 3.2, 4.8, dt);
       } else if (isSelected) {
         mainTwigGrow[k] = approach(mainTwigGrow[k], 1, 3.6, 3.4, dt);
         mainLabelErasing[k] = false;
@@ -5558,9 +6649,10 @@
         siblingSumFactor[id] = approach(curSumF, sumGoal, 2.6, 3.2, dt);
 
         if (k === "experience") {
-          const nodeT = typeof it.t === "number" ? it.t : 0.20 + idx * 0.18;
+          const nodeT = typeof it.t === "number" ? it.t : 0.16 + idx * 0.15;
           if (isSelected) {
-            const canSprout = expBoughGrow >= nodeT - 0.02;
+            const sproutThreshold = idx === 5 ? 0.93 : nodeT - 0.02;
+            const canSprout = expBoughGrow >= sproutThreshold;
             subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 3.2, 3.6, dt);
             const yrGoal = subTwigGrow[id] > 0.55 ? 1 : 0;
             itemErasing[id] = curType > yrGoal;
@@ -5571,6 +6663,14 @@
             const subGoal = itemType[id] > 0.35 || lvl2Type[id] > 0.25 ? 1 : 0;
             subTwigGrow[id] = approach(curSub, subGoal, 3.2, 3.8, dt);
           }
+        } else if (isSelected && k === "me") {
+          const matchesFlt = isMeProjectMatchingFilter(it);
+          const stagger = Math.min(0.45, idx * 0.048);
+          const canSprout = matchesFlt && branchLimbGrow.me > 0.22 + stagger;
+          subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 3.0, 3.8, dt);
+          const itemGoal = matchesFlt && subTwigGrow[id] > 0.58 ? 1 : 0;
+          itemErasing[id] = curType > itemGoal;
+          itemType[id] = approach(curType, itemGoal, 1 / 0.78, 1 / 0.22, dt);
         } else if (isSelected) {
           const stagger = Math.min(0.56, idx * 0.065);
           const canSprout = branchLimbGrow[k] > 0.22 + stagger;
@@ -5628,7 +6728,13 @@
     lastBioScreenBox = null;
     lastPortraitScreenBox = null;
     lastExpYearScreenBoxes = [];
+    lastExpLeafPuffCircles = [];
+    lastExpTextLineBoxes = [];
     lastMeProjectsScreenBoxes = [];
+    lastBioHighlightLogs = [];
+    lastMeFilterScreenBoxes = [];
+    lastMeProjectSubBoxes = [];
+    lastMeProjectActionBoxes = [];
 
     lastRenderedStars = [];
     const horizonLimitY = worldToScreen(cam.x, -18).y;
@@ -5911,6 +7017,7 @@
     }
     if (activeBranch) {
       activeBranch = null;
+      meProjectFilter = "all";
       syncCameraToActiveState(false);
       return true;
     }
@@ -5940,14 +7047,64 @@
       return;
     }
 
+    if (hit.kind === "project-jump") {
+      resetPanOffset();
+      activeBranch = "me";
+      const d = getLocale();
+      const targetProj =
+        d && d.branches && d.branches.me && Array.isArray(d.branches.me.items)
+          ? d.branches.me.items.find((it) => it.id === hit.projectId)
+          : null;
+      if (targetProj && !isMeProjectMatchingFilter(targetProj)) {
+        meProjectFilter = "all";
+      }
+      subTwigGrow[hit.projectId] = Math.max(subTwigGrow[hit.projectId] || 0, 1);
+      itemType[hit.projectId] = Math.max(itemType[hit.projectId] || 0, 1);
+      activeItem = hit.projectId;
+      syncCameraToActiveState(false);
+      return;
+    }
+
+    if (hit.kind === "project-filter") {
+      const nextFlt = hit.filterKey || "all";
+      meProjectFilter = nextFlt;
+      const d = getLocale();
+      if (activeItem && d && d.branches && d.branches.me && Array.isArray(d.branches.me.items)) {
+        const curOpen = d.branches.me.items.find((it) => it.id === activeItem);
+        if (curOpen && !isMeProjectMatchingFilter(curOpen)) {
+          activeItem = null;
+        }
+      }
+      resetPanOffset();
+      if (d && d.branches && d.branches.me) {
+        const bCfg = d.branches.me;
+        const lay = computeBranchLayout(bCfg);
+        const meLay = computeMeEditorialLayout(bCfg, lay);
+        const z = Math.max(0.35, targetCam.zoom || cam.zoom || 1);
+        targetCam.y = (meLay.projectsHeadingY - 24) - (68 - vh * 0.5) / z;
+        defaultTargetCam.y = targetCam.y;
+      }
+      return;
+    }
+
     if (hit.kind === "action") {
+      const targetUrl = hit.action && (hit.action.href || hit.action.url);
+      lastTriggeredAction = {
+        ...(hit.action || {}),
+        resolvedUrl: targetUrl || null,
+        itemId: hit.itemId || null
+      };
       if (hit.action.copy) {
         copyToClipboard(hit.action.copy);
         const msg =
           hit.action.toast || `${getLocale().copiedPrefix || "copied"} ${hit.action.copy}`;
         showToast(msg);
-      } else if (hit.action.url) {
-        window.location.href = hit.action.url;
+      } else if (targetUrl) {
+        if (/^https?:\/\//i.test(targetUrl) && typeof window.open === "function") {
+          window.open(targetUrl, "_blank", "noopener,noreferrer");
+        } else {
+          window.location.href = targetUrl;
+        }
       }
       return;
     }
@@ -7665,10 +8822,18 @@
         expBoughGrow,
         expLeafPuffCount: expLeafPuffBuffers.length,
         meProjectsHeadingType,
+        meProjectFilter,
         lastBioScreenBox: lastBioScreenBox ? { ...lastBioScreenBox } : null,
         lastPortraitScreenBox: lastPortraitScreenBox ? { ...lastPortraitScreenBox } : null,
         lastExpYearScreenBoxes: lastExpYearScreenBoxes.slice(),
-        lastMeProjectsScreenBoxes: lastMeProjectsScreenBoxes.slice()
+        lastExpLeafPuffCircles: lastExpLeafPuffCircles.slice(),
+        lastExpTextLineBoxes: lastExpTextLineBoxes.slice(),
+        lastMeProjectsScreenBoxes: lastMeProjectsScreenBoxes.slice(),
+        lastBioHighlightLogs: lastBioHighlightLogs.slice(),
+        lastMeFilterScreenBoxes: lastMeFilterScreenBoxes.slice(),
+        lastMeProjectSubBoxes: lastMeProjectSubBoxes.slice(),
+        lastMeProjectActionBoxes: lastMeProjectActionBoxes.slice(),
+        lastTriggeredAction: lastTriggeredAction ? { ...lastTriggeredAction } : null
       };
     },
     fastForward(seconds) {
@@ -7718,6 +8883,11 @@
     applyLithographGrain,
     initViewportGrain,
     drawWavyUnderline,
+    buildBiDiVisualRuns,
+    measureBiDiPhraseSpan,
+    setProjectFilter(fKey) {
+      meProjectFilter = fKey || "all";
+    },
     sliceTypewriter,
     computeDiscreteCharCount,
     computeCanopySway,

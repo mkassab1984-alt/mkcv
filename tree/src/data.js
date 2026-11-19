@@ -150,10 +150,10 @@ window.SITE_DATA = {
             "id": "wk-creative",
             "meta": "broadcast · video · motion",
             "title": "creative direction & video production",
-            "summary": "channel visual identities, campaign direction, after effects motion design & vfx.",
+            "summary": "channel visual identities, tv directing, premiere pro editing, after effects motion design & vfx.",
             "body": [
               "end-to-end creative direction across television programs, promotional campaigns, broadcast graphics, and multi-channel digital content.",
-              "integrates editorial scriptwriting with hands-on video editing, motion graphics, visual effects (adobe after effects), and voice-over supervision."
+              "integrates editorial scriptwriting with hands-on video editing (adobe premiere pro), motion graphics, visual effects (adobe after effects), and voice-over supervision."
             ],
             "tags": [
               "creative direction",
@@ -218,207 +218,201 @@ window.SITE_DATA = {
         "angle": -0.125,
         "items": [
           {
-            "id": "exp-now",
-            "t": 0.2,
+            "id": "exp-2003-2008",
+            "t": 0.16,
             "twigSide": "right",
-            "twigLen": 38,
+            "twigLen": 54,
+            "yearLabel": "2003 – 2008",
+            "title": "2003 – 2008",
+            "meta": "2003 – 2008",
+            "summary": "professional web developer & designer · digital project manager — newmedia ps",
+            "roles": [
+              {
+                "role": "professional web developer & designer · digital project manager",
+                "company": "newmedia ps · career foundation (15+ years ago)",
+                "period": "2003 – 2008",
+                "bullets": [
+                  "engineered, designed, and developed full-scale websites and interactive web interfaces",
+                  "led digital projects end-to-end from technical planning and architecture through launch",
+                  "crafted corporate visual identities and cohesive digital brand ecosystems",
+                  "coordinated cross-functional technical and design delivery with clients"
+                ]
+              }
+            ],
+            "body": [
+              "professional web developer & designer · digital project manager — newmedia ps · career foundation (15+ years ago) · 2003 – 2008.",
+              "engineered, designed, and developed full-scale websites and interactive web interfaces · led digital projects end-to-end from technical planning and architecture through launch · crafted corporate visual identities and cohesive digital brand ecosystems · coordinated cross-functional technical and design delivery with clients."
+            ],
+            "tags": [
+              "newmedia ps",
+              "web programming & design",
+              "digital project management",
+              "visual identities"
+            ]
+          },
+          {
+            "id": "exp-2008",
+            "t": 0.31,
+            "twigSide": "left",
+            "twigLen": 50,
+            "yearLabel": "2008",
+            "title": "2008",
+            "meta": "2008",
+            "summary": "tv program director · video editor, vfx & motion graphics artist",
+            "roles": [
+              {
+                "role": "tv program director · video editor, vfx & motion graphics artist",
+                "company": "professional broadcast & visual production",
+                "period": "2008",
+                "bullets": [
+                  "directed television programs and media features across studio and field production workflows",
+                  "edited broadcast programs and media content to professional pacing standards using adobe premiere pro",
+                  "designed visual effects (vfx), broadcast packages, and motion graphics using adobe after effects",
+                  "delivered end-to-end visual production, compositing, color grading, and audio finishing"
+                ]
+              }
+            ],
+            "body": [
+              "tv program director · video editor, vfx & motion graphics artist — professional broadcast & visual production · 2008.",
+              "directed television programs and media features across studio and field production workflows · edited broadcast programs and media content using adobe premiere pro · designed visual effects (vfx) and motion graphics using adobe after effects · delivered end-to-end visual production, compositing, color grading, and audio finishing."
+            ],
+            "tags": [
+              "tv directing",
+              "adobe premiere pro",
+              "adobe after effects",
+              "vfx & motion graphics"
+            ]
+          },
+          {
+            "id": "exp-2008-2012",
+            "t": 0.46,
+            "twigSide": "right",
+            "twigLen": 50,
+            "yearLabel": "2008 – 2012",
+            "title": "2008 – 2012",
+            "meta": "2008 – 2012",
+            "summary": "it consultant, pr manager & media producer — ebssar foundation",
+            "roles": [
+              {
+                "role": "it consultant, pr manager & media producer",
+                "company": "ebssar foundation & institutional media partners",
+                "period": "2008 – 2012",
+                "bullets": [
+                  "led public relations and corporate communications initiatives and negotiated with international organizations",
+                  "provided media consultancy and directed/edited institutional visual campaigns and reports",
+                  "managed website engineering, redesign, and digital infrastructure modernization projects",
+                  "built strategic media partnerships and coordinated multi-channel public outreach"
+                ]
+              }
+            ],
+            "body": [
+              "it consultant, pr manager & media producer — ebssar foundation & institutional media partners · 2008 – 2012.",
+              "led public relations and corporate communications initiatives and negotiated with international organizations · provided media consultancy and directed/edited institutional visual campaigns and reports · managed website engineering, redesign, and digital infrastructure modernization projects · built strategic media partnerships and coordinated multi-channel public outreach."
+            ],
+            "tags": [
+              "ebssar foundation",
+              "it consultancy",
+              "public relations",
+              "media production"
+            ]
+          },
+          {
+            "id": "exp-2012-2023",
+            "t": 0.62,
+            "twigSide": "left",
+            "twigLen": 48,
+            "yearLabel": "2012 – 2023",
+            "title": "2012 – 2023",
+            "meta": "2012 – 2023",
+            "summary": "creative director · broadcast director — oyoun al watan tv · mbc group · al resalah tv",
+            "roles": [
+              {
+                "role": "creative director · broadcast director & channel branding lead",
+                "company": "oyoun al watan tv · mbc group · al resalah tv",
+                "period": "2012 – 2023",
+                "bullets": [
+                  "served as creative director at oyoun al watan tv (2012–2023), leading creative and broadcast production teams",
+                  "collaborated with mbc group and al resalah tv on program directing, video editing, and television features",
+                  "directed channel visual identities, title sequences, promos, and broadcast motion graphics (premiere pro & after effects)",
+                  "partnered across multiple media houses and platforms on editorial and visual storytelling"
+                ]
+              }
+            ],
+            "body": [
+              "creative director · broadcast director & channel branding lead — oyoun al watan tv · mbc group · al resalah tv · 2012 – 2023.",
+              "served as creative director at oyoun al watan tv (2012–2023) · collaborated with mbc group and al resalah tv on program directing, video editing, and television features · directed channel visual identities, title sequences, promos, and broadcast motion graphics (premiere pro & after effects) · partnered across multiple media houses and platforms."
+            ],
+            "tags": [
+              "oyoun al watan tv",
+              "mbc group",
+              "al resalah tv",
+              "creative director"
+            ]
+          },
+          {
+            "id": "exp-2022-2023",
+            "t": 0.77,
+            "twigSide": "right",
+            "twigLen": 46,
+            "yearLabel": "2022 – 2023",
+            "title": "2022 – 2023",
+            "meta": "2022 – 2023",
+            "summary": "it, digital media & advertising campaigns consultant — wasl",
+            "roles": [
+              {
+                "role": "it, digital media & advertising campaigns consultant",
+                "company": "wasl & digital marketing consultancies",
+                "period": "2022 – 2023",
+                "bullets": [
+                  "managed digital ecosystems and directed targeted social media advertising campaigns",
+                  "produced integrated promotional assets spanning graphic design, video editing, motion graphics, and vfx",
+                  "supervised voice-over production and authored bilingual campaign copy",
+                  "bridged web technology, visual post-production, and marketing strategy for corporate clients"
+                ]
+              }
+            ],
+            "body": [
+              "it, digital media & advertising campaigns consultant — wasl & digital marketing consultancies · 2022 – 2023.",
+              "managed digital ecosystems and directed targeted social media advertising campaigns · produced integrated promotional assets spanning graphic design, video editing, motion graphics, and vfx · supervised voice-over production and authored bilingual campaign copy · bridged web technology, visual post-production, and marketing strategy."
+            ],
+            "tags": [
+              "wasl",
+              "digital media",
+              "advertising campaigns",
+              "motion graphics & vfx"
+            ]
+          },
+          {
+            "id": "exp-2023-now",
+            "t": 0.92,
+            "twigSide": "right",
+            "twigLen": 42,
             "yearLabel": "2023 – now",
             "title": "2023 – now",
-            "meta": "oct 2023 – present",
-            "summary": "saudi copywriter — akqa (wpp)",
+            "meta": "2023 – present",
+            "summary": "senior bilingual content writer & marketing consultant — sela · jeddah",
             "roles": [
               {
-                "role": "saudi copywriter",
-                "company": "akqa (wpp)",
-                "period": "oct 2023 – present",
+                "role": "senior bilingual content writer & marketing consultant",
+                "company": "sela · jeddah — present",
+                "period": "2023 – now",
                 "bullets": [
-                  "saudi cultural insights & authenticity alignment",
-                  "classical & elevated arabic poetry",
-                  "scriptwriting & script supervision",
-                  "naming creation & narrative architecture",
-                  "creative strategy & creative platform development",
-                  "integrated marketing campaigns",
-                  "360° internal & external communications",
-                  "creative decks & pitch presentations"
+                  "lead bilingual creative copywriting and localization for flagship seasons and destinations including riyadh season (2026–2027), jeddah season, qatif season, boulevard world, and visit jeddah",
+                  "craft integrated media, pr plans, digital content, and final reports for global championships and national mega-projects including the spanish super cup in istanbul, riyadh metro, «ala khutah», formula e 2026 jeddah e-prix, 2026 spanish super cup in jeddah, school league, and t100 jeddah triathlon",
+                  "develop, edit, and translate high-stakes government technical proposals and marketing initiatives for the ministry of tourism",
+                  "integrate hands-on broadcast editing, motion graphics, and vfx expertise (premiere pro & after effects) into 360° marcom strategies"
                 ]
               }
             ],
             "body": [
-              "saudi copywriter — akqa (wpp) · oct 2023 – present.",
-              "saudi cultural insights & authenticity alignment · classical & elevated arabic poetry · scriptwriting & script supervision · naming creation & narrative architecture · creative strategy & creative platform development · integrated marketing campaigns · 360° internal & external communications · creative decks & pitch presentations."
+              "senior bilingual content writer & marketing consultant — sela · jeddah — present · 2023 – now.",
+              "lead bilingual creative copywriting and localization for riyadh season (2026–2027), jeddah season, qatif season, boulevard world, and visit jeddah · craft digital content, media & pr plans, and final reports for the spanish super cup in istanbul, riyadh metro, «ala khutah», formula e 2026 jeddah e-prix, 2026 spanish super cup in jeddah, school league, and t100 jeddah triathlon · develop, edit, and translate government technical proposals for the ministry of tourism · integrate premiere pro & after effects expertise into 360° marcom strategies."
             ],
             "tags": [
-              "akqa",
-              "wpp",
-              "saudi copywriter",
-              "creative strategy"
-            ]
-          },
-          {
-            "id": "exp-2024",
-            "t": 0.38,
-            "twigSide": "left",
-            "twigLen": 42,
-            "yearLabel": "2024",
-            "title": "2024",
-            "meta": "jun 2021 – sep 2024",
-            "summary": "content consultant — shababuna organization",
-            "roles": [
-              {
-                "role": "content consultant",
-                "company": "shababuna organization",
-                "period": "jun 2021 – sep 2024",
-                "bullets": [
-                  "bilingual social media copywriting (arabic & english)",
-                  "reels & short-form video content support",
-                  "blog posts, press articles & advertising copy",
-                  "newsletter campaign direction, research & writing"
-                ]
-              }
-            ],
-            "body": [
-              "content consultant — shababuna organization · jun 2021 – sep 2024.",
-              "bilingual social media copywriting (arabic & english) · reels & short-form video content support · blog posts, press articles & advertising copy · newsletter campaign direction, research & writing."
-            ],
-            "tags": [
-              "shababuna",
-              "content consultant",
-              "bilingual copy"
-            ]
-          },
-          {
-            "id": "exp-2023",
-            "t": 0.56,
-            "twigSide": "right",
-            "twigLen": 36,
-            "yearLabel": "2023",
-            "title": "2023",
-            "meta": "jan 2023 – jul 2023",
-            "summary": "senior copywriter — wetheloft",
-            "roles": [
-              {
-                "role": "senior copywriter",
-                "company": "wetheloft",
-                "period": "jan 2023 – jul 2023",
-                "bullets": [
-                  "bilingual social media copywriting services",
-                  "bilingual proofreading & editorial refinement",
-                  "authoring illustrated children's stories",
-                  "story character development & analysis",
-                  "social content planning, copywriting & storyboarding",
-                  "product packaging copywriting",
-                  "arabic poetry with english transcreation",
-                  "audience research: focus groups & surveys",
-                  "newsletters & email marketing",
-                  "bilingual learning & development (l&d) materials",
-                  "product ideation & development"
-                ]
-              }
-            ],
-            "body": [
-              "senior copywriter — wetheloft · jan 2023 – jul 2023.",
-              "bilingual social media copywriting · proofreading & editing · illustrated children's stories & character development · packaging copy · arabic poetry & english transcreation · focus groups & surveys · newsletters & l&d materials · product ideation."
-            ],
-            "tags": [
-              "wetheloft",
-              "senior copywriter",
-              "transcreation"
-            ]
-          },
-          {
-            "id": "exp-2022",
-            "t": 0.74,
-            "twigSide": "left",
-            "twigLen": 40,
-            "yearLabel": "2022",
-            "title": "2022",
-            "meta": "2022 – 2023",
-            "summary": "nuqtanft (founding team) & ctrl c agency",
-            "roles": [
-              {
-                "role": "founding team: senior copywriter (9 mos) · creative director (3 mos)",
-                "company": "nuqtanft (startup)",
-                "period": "mar 2022 – mar 2023",
-                "bullets": [
-                  "visual design supervision & brand consistency",
-                  "design team feedback & art direction",
-                  "content calendar & creative campaign planning",
-                  "internal communications",
-                  "360° social media content marketing",
-                  "leading the content team",
-                  "creative director (3 mos): supervising copywriters"
-                ]
-              },
-              {
-                "role": "senior copywriter",
-                "company": "ctrl c agency",
-                "period": "mar 2022 – dec 2022",
-                "bullets": [
-                  "bilingual social media copywriting",
-                  "digital content ideation",
-                  "campaign planning",
-                  "content calendar development",
-                  "translation",
-                  "corporate copywriting",
-                  "brand strategy",
-                  "client care & account support"
-                ]
-              }
-            ],
-            "body": [
-              "nuqtanft (startup) — founding team: senior copywriter (9 mos) & creative director (3 mos) · mar 2022 – mar 2023.",
-              "ctrl c agency — senior copywriter · mar 2022 – dec 2022."
-            ],
-            "tags": [
-              "nuqtanft",
-              "ctrl c agency",
-              "creative director",
-              "brand strategy"
-            ]
-          },
-          {
-            "id": "exp-2021",
-            "t": 0.93,
-            "twigSide": "right",
-            "twigLen": 36,
-            "yearLabel": "2021",
-            "title": "2021",
-            "meta": "2021 – jan 2022",
-            "summary": "meraki cafe & advanced vision tourism",
-            "roles": [
-              {
-                "role": "website content writer",
-                "company": "meraki cafe",
-                "period": "sep 2021 – jan 2022",
-                "bullets": [
-                  "website copy & marketing content",
-                  "articles & blog writing",
-                  "translation",
-                  "f&b copywriting",
-                  "editorial & linguistic editing"
-                ]
-              },
-              {
-                "role": "experience writer",
-                "company": "advanced vision tourism (with quintessentially & dayim al khair)",
-                "period": "jan 2021 – apr 2021",
-                "bullets": [
-                  "designing bespoke packages & experiences for clients",
-                  "graphic layout & copywriting for experience packages",
-                  "direct coordination with suppliers & clients",
-                  "vip client servicing"
-                ]
-              }
-            ],
-            "body": [
-              "meraki cafe — website content writer · sep 2021 – jan 2022.",
-              "advanced vision tourism (with quintessentially & dayim al khair) — experience writer · jan 2021 – apr 2021."
-            ],
-            "tags": [
-              "meraki cafe",
-              "advanced vision tourism",
-              "quintessentially",
-              "vip"
+              "sela",
+              "jeddah",
+              "riyadh & jeddah seasons",
+              "global championships"
             ]
           }
         ]
@@ -478,19 +472,19 @@ window.SITE_DATA = {
           },
           {
             "id": "wr-tools",
-            "meta": "production & digital stack",
-            "title": "tools & technical skills",
-            "summary": "after effects · vfx · photoshop · illustrator · audition · wordpress · digital campaigns.",
+            "meta": "web engineering · broadcast · creative stack",
+            "title": "web programming, broadcast editing & creative skills",
+            "summary": "adobe premiere pro · after effects · vfx · web programming, design & development · photoshop · illustrator · audition.",
             "body": [
-              "visual production: after effects · video editing · motion graphics · vfx.",
-              "design & audio: photoshop · illustrator · adobe audition.",
-              "web development: wordpress. digital channels: social media management · digital campaigns."
+              "broadcast directing, editing & vfx: adobe premiere pro · adobe after effects · tv program directing · professional video editing · motion graphics · visual effects (vfx).",
+              "web programming, design & development: full-scale website programming, interactive ui/ux design, digital project architecture & wordpress.",
+              "design, audio & digital campaigns: adobe photoshop · illustrator · adobe audition · multi-platform social & paid digital campaigns."
             ],
             "tags": [
+              "adobe premiere pro",
               "after effects",
-              "photoshop & illustrator",
-              "adobe audition",
-              "wordpress"
+              "web programming, design & development",
+              "vfx & motion graphics"
             ]
           }
         ]
@@ -537,25 +531,38 @@ window.SITE_DATA = {
               ]
             },
             {
-              "text": "i currently work as senior content writer and marketing consultant at sela, crafting and localizing content for projects and events including riyadh season, jeddah season, qatif season, and visit jeddah initiatives, alongside developing ministry of tourism proposals.",
+              "text": "i currently work as a senior content writer and marketing consultant at sela. key projects i have worked on include the spanish super cup in istanbul, the riyadh metro project, the «ala khutah» project, riyadh season, jeddah season, qatif season, and ministry of tourism & visit jeddah projects.",
               "highlights": [
                 {
                   "phrase": "sela"
                 },
                 {
-                  "phrase": "riyadh season"
+                  "phrase": "spanish super cup in istanbul",
+                  "projectId": "spanish-super-cup-istanbul"
                 },
                 {
-                  "phrase": "jeddah season"
+                  "phrase": "riyadh metro project",
+                  "projectId": "riyadh-metro"
                 },
                 {
-                  "phrase": "qatif season"
+                  "phrase": "«ala khutah» project",
+                  "projectId": "ala-khutah"
                 },
                 {
-                  "phrase": "visit jeddah"
+                  "phrase": "riyadh season",
+                  "projectId": "riyadh-season"
                 },
                 {
-                  "phrase": "ministry of tourism"
+                  "phrase": "jeddah season",
+                  "projectId": "jeddah-season"
+                },
+                {
+                  "phrase": "qatif season",
+                  "projectId": "qatif-season"
+                },
+                {
+                  "phrase": "ministry of tourism & visit jeddah projects",
+                  "projectId": "tourism-visit-jeddah"
                 }
               ]
             },
@@ -583,7 +590,147 @@ window.SITE_DATA = {
         },
         "items": [
           {
+            "id": "spanish-super-cup-istanbul",
+            "category": "sports",
+            "emblem": "crest",
+            "impactBadge": "social & digital copy",
+            "meta": "global championships · sela",
+            "title": "spanish super cup in istanbul",
+            "summary": "bilingual creative content writing, social media coverage & communications messaging for the championship in arabic and english.",
+            "body": [
+              "crafted bilingual creative content, real-time social media coverage, and communications messaging for the spanish super cup in istanbul across arabic and english digital platforms.",
+              "captured matchday storylines and fan momentum through agile, culturally resonant editorial storytelling."
+            ],
+            "tags": [
+              "spanish super cup",
+              "istanbul",
+              "social media content",
+              "sela"
+            ]
+          },
+          {
+            "id": "riyadh-metro",
+            "category": "mega",
+            "emblem": "rail",
+            "impactBadge": "riyadh metro · digital & passenger copy",
+            "meta": "king khalid international airport · yellow line 4",
+            "title": "riyadh metro project",
+            "summary": "authored and structured digital passenger-experience & wayfinding copy for the riyadh metro network and king khalid international airport portal.",
+            "body": [
+              "authored and structured digital passenger-experience and wayfinding web content for the riyadh metro network on the official king khalid international airport portal (yellow line 4, terminals 1–2 & 3–4 stations, first & standard class tiers, and darb app ticketing)."
+            ],
+            "actions": [
+              {
+                "label": "view live page ↗",
+                "href": "https://www.kkia.sa/ar-sa/parking-and-transport/metro",
+                "url": "https://www.kkia.sa/ar-sa/parking-and-transport/metro",
+                "external": true
+              }
+            ],
+            "tags": [
+              "riyadh metro",
+              "kkia",
+              "yellow line 4",
+              "darb app"
+            ]
+          },
+          {
+            "id": "ala-khutah",
+            "category": "mega",
+            "emblem": "trail",
+            "impactBadge": "narrative copy & scriptwriting",
+            "meta": "cultural & historical mega-project · scriptwriting",
+            "title": "«ala khutah» project",
+            "summary": "creative content writing & narrative scriptwriting for the cultural and historical project chronicling the prophetic hijrah trail.",
+            "body": [
+              "crafted creative copy and narrative scripts for the «ala khutah» cultural and historical project, chronicling and recreating the prophetic hijrah trail through contemporary human storytelling and an immersive visitor experience."
+            ],
+            "tags": [
+              "ala khutah",
+              "scriptwriting",
+              "cultural storytelling",
+              "hijrah trail"
+            ]
+          },
+          {
+            "id": "riyadh-season",
+            "category": "seasons",
+            "emblem": "crown",
+            "impactBadge": "official booklet · zones & global events",
+            "meta": "gea · sela",
+            "title": "riyadh season",
+            "summary": "bilingual creative & editorial copywriting and localization for riyadh season zones, global championships, and the official 2026–2027 booklet.",
+            "body": [
+              "authored and localized bilingual creative and editorial copy for riyadh season zones, global championships, and the official 2026–2027 booklet — spanning boulevard world, boulevard city, wonder garden, via riyadh, the groves, al-dirah winter, farmers market, al-suwaidi park, al-hisn maze, seven al-hamra, six kings slam, wwe crown jewel, wrestlemania 43, ufc, and mena effie awards."
+            ],
+            "tags": [
+              "riyadh season",
+              "boulevard world",
+              "wrestlemania 43",
+              "sela"
+            ]
+          },
+          {
+            "id": "jeddah-season",
+            "category": "seasons",
+            "emblem": "crown",
+            "impactBadge": "seasonal copy & 360° marcom plans",
+            "meta": "jeddah season · sela",
+            "title": "jeddah season",
+            "summary": "bilingual marketing & communications copywriting and localization for jeddah season events and flagship 360° plans (including t100 jeddah triathlon).",
+            "body": [
+              "authored and localized bilingual marketing, promotional, and visitor communications copy across jeddah season events and coastal experiences.",
+              "developed integrated 360° marketing and communications plans for flagship events under jeddah season, including the t100 jeddah triathlon (100km, sprint, and 5km/1km community runs)."
+            ],
+            "tags": [
+              "jeddah season",
+              "t100 jeddah",
+              "localization",
+              "sela"
+            ]
+          },
+          {
+            "id": "qatif-season",
+            "category": "seasons",
+            "emblem": "crown",
+            "impactBadge": "creative copy & cultural localization",
+            "meta": "saudi seasons · sela",
+            "title": "qatif season",
+            "summary": "bilingual creative copywriting, cultural localization & promotional campaigns for qatif season events and visitor experiences.",
+            "body": [
+              "wrote and localized bilingual creative copy, promotional campaigns, and visitor communications for qatif season events and experiences in arabic and english, celebrating authentic regional heritage and community vibrancy."
+            ],
+            "tags": [
+              "qatif season",
+              "creative copy",
+              "localization",
+              "sela"
+            ]
+          },
+          {
+            "id": "tourism-visit-jeddah",
+            "category": "seasons",
+            "emblem": "roshan",
+            "impactBadge": "technical proposals · visit jeddah",
+            "meta": "ministry of tourism · visit jeddah",
+            "title": "ministry of tourism & visit jeddah projects",
+            "summary": "developing, editing & translating technical proposals and marketing initiatives for the ministry of tourism alongside destination copy for visit jeddah.",
+            "body": [
+              "developed, edited, and translated formal government technical proposals and strategic marketing initiatives for the ministry of tourism in strict alignment with institutional standards.",
+              "authored and localized bilingual destination storytelling and promotional campaigns for «visit jeddah» initiatives showcasing coastal heritage, culture, and visitor experiences."
+            ],
+            "tags": [
+              "ministry of tourism",
+              "visit jeddah",
+              "technical proposals",
+              "tourism"
+            ]
+          },
+          {
             "id": "pr-formula-e",
+            "category": "sports",
+            "emblem": "circuit",
+            "impactBadge": "7.5b reach · 61 countries",
             "meta": "ministry of sport · sela",
             "title": "abb fia formula e — 2026 jeddah e-prix",
             "summary": "bilingual press office, media guides & final report — 2,512 articles in 61 countries, 7.5b reach & $191m ave.",
@@ -599,6 +746,9 @@ window.SITE_DATA = {
           },
           {
             "id": "pr-super-cup",
+            "category": "sports",
+            "emblem": "crest",
+            "impactBadge": "47,492 clippings · 170 countries",
             "meta": "ministry of sport · sela",
             "title": "2026 spanish super cup in jeddah",
             "summary": "media & pr plan, 52 bilingual press pieces & 20 videos — 47,492 clippings across 170 countries, 1.2b reach & $389m ave.",
@@ -613,22 +763,10 @@ window.SITE_DATA = {
             ]
           },
           {
-            "id": "pr-riyadh-season",
-            "meta": "gea · sela",
-            "title": "riyadh season 2026–2027 — official booklet, zones & global events",
-            "summary": "bilingual creative copy for the official booklet, major zones & global championships including wrestlemania 43, six kings slam & ufc.",
-            "body": [
-              "authored and localized bilingual creative copy for the official riyadh season 2026–2027 booklet, zones, and global championships — spanning six kings slam, wwe crown jewel, wrestlemania 43, ufc, mena effie awards, boulevard world, boulevard city, wonder garden, via riyadh, the groves, al-dirah winter, farmers market, al-suwaidi park, al-hisn maze, and seven al-hamra."
-            ],
-            "tags": [
-              "riyadh season",
-              "boulevard world",
-              "wrestlemania 43",
-              "sela"
-            ]
-          },
-          {
             "id": "pr-school-league",
+            "category": "sports",
+            "emblem": "laurel",
+            "impactBadge": "8-week rollout · pr & crisis",
             "meta": "ministries of sport & education · sela",
             "title": "school league 2025–2026 — media, pr & crisis comms plan",
             "summary": "integrated communications & marketing plan, 8-week rollout, influencer strategy & crisis comms playbook.",
@@ -641,83 +779,24 @@ window.SITE_DATA = {
               "ministry of education",
               "pr strategy"
             ]
+          }
+        ],
+        "projectFilters": [
+          {
+            "id": "all",
+            "label": "all"
           },
           {
-            "id": "pr-t100-jeddah",
-            "meta": "jeddah season · sela",
-            "title": "t100 jeddah triathlon — integrated marcom plan",
-            "summary": "360° marketing & communications plan for 100km, sprint & community runs under jeddah season.",
-            "body": [
-              "built the 360° integrated marketing and communications plan for t100 jeddah under jeddah season (100km, sprint, and 5km/1km community runs) — covering audience messaging, paid media mix, content calendar, creator partnerships, and pr rollout."
-            ],
-            "tags": [
-              "t100 jeddah",
-              "jeddah season",
-              "marcom plan",
-              "sela"
-            ]
+            "id": "sports",
+            "label": "global sports"
           },
           {
-            "id": "pr-coastal-seasons",
-            "meta": "destinations & seasonal initiatives",
-            "title": "boulevard world - jeddah season - qatif season - visit jeddah initiatives",
-            "summary": "bilingual destination marketing copy, cultural localization & visitor communications for flagship coastal and seasonal attractions.",
-            "body": [
-              "authored and localized arabic and english campaign copy, visitor guides, and promotional narratives for boulevard world, jeddah season, qatif season, and visit jeddah initiatives.",
-              "crafted culturally resonant messaging aligned with creative storytelling, motion graphics, and seasonal launches for local communities and international visitors."
-            ],
-            "tags": [
-              "boulevard world",
-              "jeddah season",
-              "qatif season",
-              "visit jeddah"
-            ]
+            "id": "seasons",
+            "label": "seasons & tourism"
           },
           {
-            "id": "pr-tourism",
-            "meta": "government & institutional",
-            "title": "ministry of tourism technical proposals & marketing initiatives",
-            "summary": "government technical proposals, institutional translation & strategic tourism communications.",
-            "body": [
-              "developed, edited, and translated comprehensive technical proposals and marketing materials for the ministry of tourism, strictly aligned with institutional tone and submission requirements.",
-              "crafted bilingual strategic narratives and presentation materials showcasing tourism initiatives across arabic and english deliverables."
-            ],
-            "tags": [
-              "ministry of tourism",
-              "technical proposals",
-              "institutional content"
-            ]
-          },
-          {
-            "id": "pr-national",
-            "meta": "national mega-projects",
-            "title": "riyadh metro project - ala khutah project",
-            "summary": "corporate & public-facing bilingual communications for landmark national initiatives.",
-            "body": [
-              "delivered bilingual corporate writing, editorial localization, and public narratives for major national initiatives including the riyadh metro project and the ala khutah project.",
-              "combined institutional clarity and accuracy with engaging public storytelling across arabic and english deliverables."
-            ],
-            "tags": [
-              "riyadh metro",
-              "ala khutah",
-              "national projects"
-            ]
-          },
-          {
-            "id": "pr-mbc",
-            "meta": "broadcast & channel branding · 2012 – 2023",
-            "title": "broadcast visual identities & tv promos — mbc group & oyoun al watan tv",
-            "summary": "editing & directing collaborations with mbc group; creative direction, channel visual identities & broadcast promos at oyoun al watan tv.",
-            "body": [
-              "collaborated with mbc group on video editing and directing productions, and served as creative director at oyoun al watan tv from 2012 to 2023.",
-              "oversaw full channel visual identities, promotional campaigns, title sequences, and broadcast motion graphics."
-            ],
-            "tags": [
-              "mbc group",
-              "oyoun al watan tv",
-              "visual identities",
-              "tv promos"
-            ]
+            "id": "mega",
+            "label": "national mega-projects"
           }
         ]
       }
@@ -874,10 +953,10 @@ window.SITE_DATA = {
             "id": "wk-creative",
             "meta": "إعلام · إنتاج مرئي · موشن",
             "title": "الإدارة الإبداعية والإنتاج المرئي والرقمي",
-            "summary": "الهويات البصرية للمحطات، إخراج الحملات والبرامج، والموشن جرافيك والمؤثرات.",
+            "summary": "الهويات البصرية للمحطات، إخراج ومونتاج البرامج (Premiere Pro)، والموشن جرافيك والمؤثرات (After Effects).",
             "body": [
               "قيادة العمليات الإبداعية وإخراج البرامج التلفزيونية والتقارير الإعلامية والحملات الترويجية المتكاملة.",
-              "دمج التوجيه التحريري مع الخبرة العملية في تحرير الفيديو والموشن جرافيك والمؤثرات البصرية (Adobe After Effects) والإشراف على الإنتاج الصوتي."
+              "دمج التوجيه التحريري مع الخبرة العملية في المونتاج الاحترافي (Adobe Premiere Pro) والموشن جرافيك والمؤثرات البصرية (Adobe After Effects) والإشراف على الإنتاج الصوتي."
             ],
             "tags": [
               "إدارة إبداعية",
@@ -942,207 +1021,201 @@ window.SITE_DATA = {
         "angle": -0.125,
         "items": [
           {
-            "id": "exp-now",
-            "t": 0.2,
+            "id": "exp-2003-2008",
+            "t": 0.16,
             "twigSide": "right",
-            "twigLen": 38,
+            "twigLen": 54,
+            "yearLabel": "2003 – 2008",
+            "title": "2003 – 2008",
+            "meta": "2003 – 2008",
+            "summary": "مبرمج ومطور ومصمم مواقع إلكترونية محترف · مدير مشاريع رقمية — NEWMEDIA PS",
+            "roles": [
+              {
+                "role": "مبرمج ومطور ومصمم مواقع إلكترونية محترف · مدير مشاريع رقمية",
+                "company": "NEWMEDIA PS · بداية المسيرة المهنية (قبل أكثر من 15 عاماً)",
+                "period": "2003 – 2008",
+                "bullets": [
+                  "احتراف برمجة وتطوير وتصميم المواقع الإلكترونية والواجهات التفاعلية وفق معايير الويب الحديثة",
+                  "قيادة المشاريع الرقمية متكاملةً من مرحلة التخطيط والتحليل إلى الإطلاق والتسليم النهائي",
+                  "تصميم الهويات البصرية والمؤسسية للشركات وبناء حضورها الرقمي المتكامل",
+                  "إدارة فرق التنفيذ التقني والإبداعي وتنسيق جودة المخرجات مع العملاء"
+                ]
+              }
+            ],
+            "body": [
+              "مبرمج ومطور ومصمم مواقع إلكترونية محترف · مدير مشاريع رقمية — NEWMEDIA PS · بداية المسيرة المهنية (قبل أكثر من 15 عاماً) · 2003 – 2008.",
+              "احتراف برمجة وتطوير وتصميم المواقع الإلكترونية والواجهات التفاعلية · قيادة المشاريع الرقمية متكاملةً من التخطيط والتحليل إلى الإطلاق · تصميم الهويات البصرية والمؤسسية للشركات · إدارة فرق التنفيذ التقني والإبداعي."
+            ],
+            "tags": [
+              "NEWMEDIA PS",
+              "برمجة وتصميم مواقع",
+              "إدارة مشاريع رقمية",
+              "هويات بصرية"
+            ]
+          },
+          {
+            "id": "exp-2008",
+            "t": 0.31,
+            "twigSide": "left",
+            "twigLen": 50,
+            "yearLabel": "2008",
+            "title": "2008",
+            "meta": "2008",
+            "summary": "مخرج برامج تلفزيونية · مونتاج ومؤثرات بصرية وموشن جرافيك",
+            "roles": [
+              {
+                "role": "مخرج برامج تلفزيونية · مونتاج ومؤثرات بصرية وموشن جرافيك",
+                "company": "الإنتاج التلفزيوني والمرئي الاحترافي",
+                "period": "2008",
+                "bullets": [
+                  "إخراج البرامج التلفزيونية والتقارير المصورة وإدارة مراحل الإنتاج الإعلامي الميداني والاستوديو",
+                  "مونتاج وإنتاج البرامج التلفزيونية والمحتوى الإعلامي بإيقاع بصري وسردي احترافي باستخدام Adobe Premiere Pro",
+                  "تصميم المؤثرات البصرية (VFX) والرسوم المتحركة (Motion Graphics) الاحترافية باستخدام Adobe After Effects",
+                  "تطبيق أعلى المعايير الفنية والجمالية في الإنتاج المرئي وتصحيح الألوان والهندسة الصوتية"
+                ]
+              }
+            ],
+            "body": [
+              "مخرج برامج تلفزيونية · مونتاج ومؤثرات بصرية وموشن جرافيك — الإنتاج التلفزيوني والمرئي الاحترافي · 2008.",
+              "إخراج البرامج التلفزيونية والتقارير المصورة · مونتاج وإنتاج المحتوى الإعلامي باستخدام Adobe Premiere Pro · تصميم المؤثرات البصرية (VFX) والموشن جرافيك باستخدام Adobe After Effects · تصحيح الألوان والهندسة الصوتية."
+            ],
+            "tags": [
+              "إخراج تلفزيوني",
+              "Adobe Premiere Pro",
+              "Adobe After Effects",
+              "VFX & Motion Graphics"
+            ]
+          },
+          {
+            "id": "exp-2008-2012",
+            "t": 0.46,
+            "twigSide": "right",
+            "twigLen": 50,
+            "yearLabel": "2008 – 2012",
+            "title": "2008 – 2012",
+            "meta": "2008 – 2012",
+            "summary": "مستشار تقنية معلومات ومدير علاقات عامة وإنتاج إعلامي — مؤسسة إبصار",
+            "roles": [
+              {
+                "role": "مستشار تقنية معلومات ومدير علاقات عامة وإنتاج إعلامي",
+                "company": "مؤسسة إبصار وجهات إعلامية ومؤسسية",
+                "period": "2008 – 2012",
+                "bullets": [
+                  "قيادة مبادرات العلاقات العامة والاتصال المؤسسي والتفاوض مع الشركاء والمنظمات الدولية",
+                  "تقديم الاستشارات الإعلامية وإنتاج وإخراج المواد المرئية والتقارير التوعوية والمؤسسية",
+                  "إدارة مشاريع تطوير وتصميم المواقع الإلكترونية وتحديث البنية التحتية الرقمية",
+                  "بناء الشراكات الإعلامية وتنسيق الفعاليات والحملات الاتصالية متعددة المنصات"
+                ]
+              }
+            ],
+            "body": [
+              "مستشار تقنية معلومات ومدير علاقات عامة وإنتاج إعلامي — مؤسسة إبصار وجهات إعلامية ومؤسسية · 2008 – 2012.",
+              "قيادة مبادرات العلاقات العامة والاتصال المؤسسي والتفاوض مع الشركاء والمنظمات الدولية · تقديم الاستشارات الإعلامية وإنتاج وإخراج المواد المرئية · إدارة مشاريع تطوير وتصميم المواقع الإلكترونية · بناء الشراكات الإعلامية."
+            ],
+            "tags": [
+              "مؤسسة إبصار",
+              "استشارات تقنية",
+              "علاقات عامة",
+              "إنتاج إعلامي"
+            ]
+          },
+          {
+            "id": "exp-2012-2023",
+            "t": 0.62,
+            "twigSide": "left",
+            "twigLen": 48,
+            "yearLabel": "2012 – 2023",
+            "title": "2012 – 2023",
+            "meta": "2012 – 2023",
+            "summary": "مدير إبداعي · مخرج ومشرف إنتاج وهويات تلفزيونية — عيون الوطن · MBC · الرسالة",
+            "roles": [
+              {
+                "role": "مدير إبداعي · مخرج ومشرف إنتاج وهويات تلفزيونية",
+                "company": "تلفزيون عيون الوطن · مجموعة MBC · قناة الرسالة",
+                "period": "2012 – 2023",
+                "bullets": [
+                  "شَغْل منصب المدير الإبداعي في تلفزيون عيون الوطن (2012–2023) وقيادة الفرق الإبداعية والإنتاجية",
+                  "التعاون مع مجموعة MBC وقناة الرسالة في تنفيذ أعمال الإخراج والمونتاج وإنتاج البرامج التلفزيونية والتقارير الإعلامية",
+                  "الإشراف على الهويات البصرية للقنوات وتطوير شارات البرامج والبروموهات التلفزيونية والموشن جرافيك (Premiere Pro & After Effects)",
+                  "التنقل والعمل الاستشاري والإبداعي مع جهات ومنصات إعلامية متعددة في صناعة المحتوى المرئي والتحريري"
+                ]
+              }
+            ],
+            "body": [
+              "مدير إبداعي · مخرج ومشرف إنتاج وهويات تلفزيونية — تلفزيون عيون الوطن · مجموعة MBC · قناة الرسالة · 2012 – 2023.",
+              "شَغْل منصب المدير الإبداعي في تلفزيون عيون الوطن (2012–2023) · التعاون مع مجموعة MBC وقناة الرسالة في الإخراج والمونتاج وإنتاج البرامج · الإشراف على الهويات البصرية للقنوات والبروموهات والموشن جرافيك (Premiere Pro & After Effects)."
+            ],
+            "tags": [
+              "تلفزيون عيون الوطن",
+              "مجموعة MBC",
+              "قناة الرسالة",
+              "مدير إبداعي"
+            ]
+          },
+          {
+            "id": "exp-2022-2023",
+            "t": 0.77,
+            "twigSide": "right",
+            "twigLen": 46,
+            "yearLabel": "2022 – 2023",
+            "title": "2022 – 2023",
+            "meta": "2022 – 2023",
+            "summary": "مستشار تقنية معلومات وإعلام رقمي وحملات إعلانية — شركة WASL",
+            "roles": [
+              {
+                "role": "مستشار تقنية معلومات وإعلام رقمي وحملات إعلانية",
+                "company": "شركة WASL وجهات الاستشارات التسويقية والرقمية",
+                "period": "2022 – 2023",
+                "bullets": [
+                  "إدارة الحسابات والمنصات الرقمية وتوجيه الحملات الإعلانية المدفوعة عبر وسائل التواصل الاجتماعي",
+                  "إنتاج المواد الترويجية المتكاملة شاملةً التصاميم الجرافيكية وتحرير الفيديو والموشن جرافيك والمؤثرات البصرية",
+                  "الإشراف الفني على الإنتاج الصوتي والتعليق الإعلاني وصياغة المحتوى الإبداعي ثنائي اللغة",
+                  "ربط الخبرة البرمجية والمرئية بالاستراتيجية التسويقية لتطوير حضور العلامات التجارية رقمياً"
+                ]
+              }
+            ],
+            "body": [
+              "مستشار تقنية معلومات وإعلام رقمي وحملات إعلانية — شركة WASL وجهات الاستشارات التسويقية والرقمية · 2022 – 2023.",
+              "إدارة الحسابات والمنصات الرقمية وتوجيه الحملات الإعلانية المدفوعة · إنتاج المواد الترويجية المتكاملة شاملةً التصاميم الجرافيكية وتحرير الفيديو والموشن جرافيك والمؤثرات البصرية · الإشراف الفني على الإنتاج الصوتي وصياغة المحتوى الإبداعي ثنائي اللغة."
+            ],
+            "tags": [
+              "WASL",
+              "إعلام رقمي",
+              "حملات إعلانية",
+              "موشن جرافيك"
+            ]
+          },
+          {
+            "id": "exp-2023-now",
+            "t": 0.92,
+            "twigSide": "right",
+            "twigLen": 42,
             "yearLabel": "2023 – الآن",
             "title": "2023 – الآن",
-            "meta": "أكتوبر 2023 – الآن",
-            "summary": "كاتب إعلاني للسوق السعودي — «AKQA» (WPP)",
+            "meta": "2023 – الآن",
+            "summary": "كاتب محتوى أول باللغتين العربية والإنجليزية واستشاري تسويق — شركة صلة (SELA)",
             "roles": [
               {
-                "role": "كاتب إعلاني للسوق السعودي",
-                "company": "«AKQA» (WPP)",
-                "period": "أكتوبر 2023 – الآن",
+                "role": "كاتب محتوى أول باللغتين العربية والإنجليزية واستشاري تسويق",
+                "company": "شركة صلة (SELA) · جدة — حتى الآن",
+                "period": "2023 – الآن",
                 "bullets": [
-                  "الرؤى الثقافية السعودية وضمان الاتساق معها",
-                  "الشعر العربي الرفيع",
-                  "كتابة السيناريو والإشراف عليه",
-                  "ابتكار الأسماء وبناء السرديات",
-                  "الاستراتيجية الإبداعية وتطوير المنصات الإبداعية",
-                  "الحملات التسويقية",
-                  "الاتصال الشامل (360°) الداخلي والخارجي",
-                  "العروض الإبداعية والتقديمية"
+                  "قيادة صياغة المحتوى الإبداعي والاتصالي وتوطينه للمواسم والفعاليات الكبرى، شاملةً موسم الرياض (2026–2027)، وموسم جدة، وموسم القطيف، وبوليفارد وورلد، ومبادرات «زيارة جدة»",
+                  "صياغة المحتوى الرقمي والسيناريو وإعداد الخطط الإعلامية والتقارير الختامية لبطولات عالمية ومشاريع كبرى، منها كأس السوبر الإسباني في إسطنبول، ومشروع رياض مترو، ومشروع «على خطاه»، وفورمولا إي جدة إي بري 2026، وكأس السوبر الإسباني 2026 في جدة، ودوري المدارس، وترايثلون T100 جدة",
+                  "إعداد وتحرير وترجمة العروض الفنية والمبادرات التسويقية لوزارة السياحة والجهات الحكومية وفق أعلى المعايير المؤسسية",
+                  "توظيف الخبرة المتراكمة في البرمجة والإخراج والمونتاج والموشن جرافيك (Adobe Premiere Pro & After Effects) ضمن الخطط التسويقية المتكاملة"
                 ]
               }
             ],
             "body": [
-              "كاتب إعلاني للسوق السعودي — «AKQA» (WPP) · أكتوبر 2023 – الآن.",
-              "الرؤى الثقافية السعودية وضمان الاتساق معها · الشعر العربي الرفيع · كتابة السيناريو والإشراف عليه · ابتكار الأسماء وبناء السرديات · الاستراتيجية الإبداعية وتطوير المنصات الإبداعية · الحملات التسويقية · الاتصال الشامل (360°) الداخلي والخارجي · العروض الإبداعية والتقديمية."
+              "كاتب محتوى أول باللغتين العربية والإنجليزية واستشاري تسويق — شركة صلة (SELA) · جدة — حتى الآن · 2023 – الآن.",
+              "قيادة صياغة المحتوى الإبداعي والاتصالي وتوطينه لموسم الرياض (2026–2027)، وموسم جدة، وموسم القطيف، وبوليفارد وورلد، ومبادرات «زيارة جدة» · صياغة المحتوى والخطط الإعلامية والتقارير الختامية لكأس السوبر الإسباني في إسطنبول، ومشروع رياض مترو، ومشروع «على خطاه»، وفورمولا إي جدة إي بري 2026، وكأس السوبر الإسباني 2026، ودوري المدارس، وترايثلون T100 جدة · إعداد عروض وزارة السياحة · توظيف خبرة البرمجة والمونتاج والموشن جرافيك (Adobe Premiere Pro & After Effects)."
             ],
             "tags": [
-              "AKQA",
-              "WPP",
-              "كاتب إعلاني",
-              "استراتيجية إبداعية"
-            ]
-          },
-          {
-            "id": "exp-2024",
-            "t": 0.38,
-            "twigSide": "left",
-            "twigLen": 42,
-            "yearLabel": "2024",
-            "title": "2024",
-            "meta": "يونيو 2021 – سبتمبر 2024",
-            "summary": "مستشار محتوى — «منظمة شبابنا»",
-            "roles": [
-              {
-                "role": "مستشار محتوى",
-                "company": "«منظمة شبابنا»",
-                "period": "يونيو 2021 – سبتمبر 2024",
-                "bullets": [
-                  "كتابة محتوى وسائل التواصل الاجتماعي (عربي وإنجليزي)",
-                  "دعم مقاطع الريلز والفيديو",
-                  "كتابة المدونات والمقالات الصحفية والنصوص الإعلانية",
-                  "توجيه حملات النشرات البريدية وكتابتها والبحث لها"
-                ]
-              }
-            ],
-            "body": [
-              "مستشار محتوى — «منظمة شبابنا» · يونيو 2021 – سبتمبر 2024.",
-              "كتابة محتوى وسائل التواصل الاجتماعي (عربي وإنجليزي) · دعم مقاطع الريلز والفيديو · كتابة المدونات والمقالات الصحفية والنصوص الإعلانية · توجيه حملات النشرات البريدية وكتابتها والبحث لها."
-            ],
-            "tags": [
-              "منظمة شبابنا",
-              "مستشار محتوى",
-              "عربي وإنجليزي"
-            ]
-          },
-          {
-            "id": "exp-2023",
-            "t": 0.56,
-            "twigSide": "right",
-            "twigLen": 36,
-            "yearLabel": "2023",
-            "title": "2023",
-            "meta": "يناير 2023 – يوليو 2023",
-            "summary": "كاتب إعلاني أول — «Wetheloft»",
-            "roles": [
-              {
-                "role": "كاتب إعلاني أول",
-                "company": "«Wetheloft»",
-                "period": "يناير 2023 – يوليو 2023",
-                "bullets": [
-                  "خدمات كتابة محتوى وسائل التواصل الاجتماعي بلغتين",
-                  "التدقيق اللغوي والتحرير بلغتين",
-                  "تأليف قصص الأطفال المصورة",
-                  "تطوير الشخصيات القصصية وتحليلها",
-                  "تخطيط محتوى وسائل التواصل وكتابته ورسمه",
-                  "كتابة نصوص تغليف المنتجات",
-                  "الشعر العربي مع الإبداع الترجمي إلى الإنجليزية (Trans-creation)",
-                  "أبحاث الجمهور: مجموعات التركيز والاستبيانات",
-                  "النشرات البريدية والتسويق عبر البريد الإلكتروني",
-                  "مواد تعليمية ثنائية اللغة لقطاع التعلّم والتطوير",
-                  "ابتكار المنتجات وتطويرها"
-                ]
-              }
-            ],
-            "body": [
-              "كاتب إعلاني أول — «Wetheloft» · يناير 2023 – يوليو 2023.",
-              "كتابة محتوى وسائل التواصل والتدقيق اللغوي بلغتين · تأليف قصص الأطفال المصورة وتطوير الشخصيات · نصوص تغليف المنتجات · الشعر العربي والإبداع الترجمي · أبحاث الجمهور والنشرات البريدية ومواد التعلّم والتطوير · ابتكار المنتجات."
-            ],
-            "tags": [
-              "Wetheloft",
-              "كاتب إعلاني أول",
-              "إبداع ترجمي"
-            ]
-          },
-          {
-            "id": "exp-2022",
-            "t": 0.74,
-            "twigSide": "left",
-            "twigLen": 40,
-            "yearLabel": "2022",
-            "title": "2022",
-            "meta": "2022 – 2023",
-            "summary": "«NuqtaNFT» (عضو الفريق المؤسس) و«Ctrl C Agency»",
-            "roles": [
-              {
-                "role": "عضو الفريق المؤسس: كاتب إعلاني أول (9 أشهر) · مدير إبداعي (3 أشهر)",
-                "company": "«NuqtaNFT» (شركة ناشئة)",
-                "period": "مارس 2022 – مارس 2023",
-                "bullets": [
-                  "الإشراف على التصاميم المرئية وتناسق الهوية",
-                  "تقديم الملاحظات للفريق التصميمي والإشراف عليه",
-                  "تخطيط تقويم المحتوى والحملات الإبداعية",
-                  "الاتصال الداخلي",
-                  "التسويق عبر محتوى وسائل التواصل الاجتماعي (360°)",
-                  "قيادة فريق المحتوى",
-                  "مدير إبداعي (3 أشهر): الإشراف على الكتّاب الإعلانيين"
-                ]
-              },
-              {
-                "role": "كاتب إعلاني أول",
-                "company": "«Ctrl C Agency»",
-                "period": "مارس 2022 – ديسمبر 2022",
-                "bullets": [
-                  "كتابة محتوى وسائل التواصل بلغتين",
-                  "توليد أفكار المحتوى الرقمي",
-                  "التخطيط للحملات",
-                  "إعداد تقويم المحتوى",
-                  "الترجمة",
-                  "الكتابة الإعلانية للشركات",
-                  "استراتيجية العلامة التجارية",
-                  "العناية بالعملاء"
-                ]
-              }
-            ],
-            "body": [
-              "«NuqtaNFT» (شركة ناشئة) — عضو الفريق المؤسس: كاتب إعلاني أول (9 أشهر) ومدير إبداعي (3 أشهر) · مارس 2022 – مارس 2023.",
-              "«Ctrl C Agency» — كاتب إعلاني أول · مارس 2022 – ديسمبر 2022."
-            ],
-            "tags": [
-              "NuqtaNFT",
-              "Ctrl C Agency",
-              "مدير إبداعي",
-              "استراتيجية العلامة"
-            ]
-          },
-          {
-            "id": "exp-2021",
-            "t": 0.93,
-            "twigSide": "right",
-            "twigLen": 36,
-            "yearLabel": "2021",
-            "title": "2021",
-            "meta": "2021 – يناير 2022",
-            "summary": "«مقهى ميراكي» و«أدفانسد فجن للسياحة»",
-            "roles": [
-              {
-                "role": "كاتب محتوى للمواقع الإلكترونية",
-                "company": "«مقهى ميراكي»",
-                "period": "سبتمبر 2021 – يناير 2022",
-                "bullets": [
-                  "كتابة نصوص الموقع والمحتوى التسويقي",
-                  "المقالات والمدونات",
-                  "الترجمة",
-                  "الكتابة الإعلانية لقطاع الأغذية والمشروبات",
-                  "التحرير اللغوي"
-                ]
-              },
-              {
-                "role": "كاتب تجارب",
-                "company": "«أدفانسد فجن للسياحة» (بالتعاون مع «كوينتيسنشيالي» و«دايم الخير»)",
-                "period": "يناير 2021 – أبريل 2021",
-                "bullets": [
-                  "ابتكار باقات ومنتجات لعملاء الشركة",
-                  "تصميم الباقات غرافيكيًا وكتابة محتواها",
-                  "التواصل المباشر مع الموردين والعملاء",
-                  "خدمة العملاء المميزين (VIP)"
-                ]
-              }
-            ],
-            "body": [
-              "«مقهى ميراكي» — كاتب محتوى للمواقع الإلكترونية · سبتمبر 2021 – يناير 2022.",
-              "«أدفانسد فجن للسياحة» (بالتعاون مع «كوينتيسنشيالي» و«دايم الخير») — كاتب تجارب · يناير 2021 – أبريل 2021."
-            ],
-            "tags": [
-              "مقهى ميراكي",
-              "أدفانسد فجن للسياحة",
-              "كوينتيسنشيالي",
-              "VIP"
+              "شركة صلة",
+              "SELA",
+              "موسم الرياض وجدة",
+              "البطولات العالمية"
             ]
           }
         ]
@@ -1202,19 +1275,19 @@ window.SITE_DATA = {
           },
           {
             "id": "wr-tools",
-            "meta": "منظومة الإنتاج والأدوات",
-            "title": "الأدوات والمهارات التقنية",
-            "summary": "After Effects · VFX · Photoshop · Illustrator · Audition · WordPress · الحملات الرقمية.",
+            "meta": "البرمجة · الإنتاج المرئي · الأدوات الإبداعية",
+            "title": "الأدوات والمهارات التقنية والإبداعية",
+            "summary": "Adobe Premiere Pro · After Effects · برمجة وتطوير وتصميم المواقع الإلكترونية · VFX · الموشن جرافيك.",
             "body": [
-              "الإنتاج المرئي: After Effects · تحرير الفيديو · الموشن جرافيك · المؤثرات البصرية (VFX).",
-              "التصميم والصوت: Photoshop · Illustrator · Adobe Audition.",
-              "تطوير الويب والقنوات الرقمية: WordPress · إدارة حسابات التواصل الاجتماعي · إدارة الحملات الرقمية."
+              "الإخراج والمونتاج والمؤثرات البصرية: Adobe Premiere Pro · After Effects · إخراج البرامج التلفزيونية · المونتاج الاحترافي · الموشن جرافيك · المؤثرات البصرية (VFX).",
+              "برمجة وتطوير وتصميم المواقع الإلكترونية: هندسة وبرمجة وتصميم المواقع المتكاملة والواجهات التفاعلية · WordPress · إدارة المشاريع والبنية الرقمية.",
+              "التصميم الجرافيكي والصوت والحملات: Adobe Photoshop · Illustrator · Adobe Audition · إدارة المنصات والحملات الإعلانية الرقمية."
             ],
             "tags": [
+              "Adobe Premiere Pro",
               "After Effects",
-              "Photoshop & Illustrator",
-              "Adobe Audition",
-              "WordPress"
+              "برمجة وتطوير وتصميم المواقع الإلكترونية",
+              "VFX & Motion Graphics"
             ]
           }
         ]
@@ -1261,25 +1334,38 @@ window.SITE_DATA = {
               ]
             },
             {
-              "text": "أعمل حاليًا كاتب محتوى أول واستشاري تسويق في شركة صلة، حيث أتولى صياغة المحتوى وتوطينه لمشروعات وفعاليات تشمل موسم الرياض، وموسم جدة، وموسم القطيف، ومبادرات «زيارة جدة»، إلى جانب إعداد عروض وزارة السياحة.",
+              "text": "أعمل حاليًا كاتب محتوى أول واستشاري تسويق في شركة صلة، ومن أبرز المشاريع التي عملت عليها: كأس السوبر الإسباني في إسطنبول، ومشروع رياض مترو، ومشروع «على خطاه»، وموسم الرياض، وموسم جدة، وموسم القطيف، ومشاريع وزارة السياحة وVisit Jeddah.",
               "highlights": [
                 {
                   "phrase": "شركة صلة"
                 },
                 {
-                  "phrase": "موسم الرياض"
+                  "phrase": "كأس السوبر الإسباني في إسطنبول",
+                  "projectId": "spanish-super-cup-istanbul"
                 },
                 {
-                  "phrase": "موسم جدة"
+                  "phrase": "مشروع رياض مترو",
+                  "projectId": "riyadh-metro"
                 },
                 {
-                  "phrase": "موسم القطيف"
+                  "phrase": "مشروع «على خطاه»",
+                  "projectId": "ala-khutah"
                 },
                 {
-                  "phrase": "«زيارة جدة»"
+                  "phrase": "موسم الرياض",
+                  "projectId": "riyadh-season"
                 },
                 {
-                  "phrase": "وزارة السياحة"
+                  "phrase": "موسم جدة",
+                  "projectId": "jeddah-season"
+                },
+                {
+                  "phrase": "موسم القطيف",
+                  "projectId": "qatif-season"
+                },
+                {
+                  "phrase": "مشاريع وزارة السياحة وVisit Jeddah",
+                  "projectId": "tourism-visit-jeddah"
                 }
               ]
             },
@@ -1307,7 +1393,147 @@ window.SITE_DATA = {
         },
         "items": [
           {
+            "id": "spanish-super-cup-istanbul",
+            "category": "sports",
+            "emblem": "crest",
+            "impactBadge": "محتوى ومنصات رقمية",
+            "meta": "بطولات عالمية · شركة صلة",
+            "title": "كأس السوبر الإسباني في إسطنبول",
+            "summary": "صياغة المحتوى الإبداعي والتغطية الرقمية لمنصات التواصل الاجتماعي والرسائل الاتصالية للبطولة باللغتين العربية والإنجليزية.",
+            "body": [
+              "صياغة المحتوى الإبداعي والتغطية الرقمية لمنصات التواصل الاجتماعي والرسائل الاتصالية لبطولة كأس السوبر الإسباني في إسطنبول باللغتين العربية والإنجليزية.",
+              "مواكبة مجريات البطولة وأجوائها الجماهيرية برسائل تفاعلية سريعة تجمع الدقة التحريرية والحضور الرقمي المؤثر."
+            ],
+            "tags": [
+              "كأس السوبر الإسباني",
+              "إسطنبول",
+              "محتوى رقمي",
+              "شركة صلة"
+            ]
+          },
+          {
+            "id": "riyadh-metro",
+            "category": "mega",
+            "emblem": "rail",
+            "impactBadge": "مترو الرياض · محتوى رقمي وتجربة مسافر",
+            "meta": "بوابة مطار الملك خالد الدولي · المسار الأصفر 4",
+            "title": "مشروع رياض مترو",
+            "summary": "صياغة وتطوير المحتوى الرقمي والإرشادي لتجربة المسافر عبر شبكة قطار الرياض (المترو) وبوابة مطار الملك خالد الدولي بالرياض.",
+            "body": [
+              "صياغة وتطوير المحتوى الرقمي والإرشادي لتجربة المسافر عبر شبكة قطار الرياض (المترو) وبوابة مطار الملك خالد الدولي بالرياض (الخط الأصفر – مسار 4، محطات الصالات 1–2 و3–4، فئات الدرجة الأولى والعادية، وخيارات التذاكر والدفع عبر تطبيق «درب»)."
+            ],
+            "actions": [
+              {
+                "label": "معاينة الصفحة الحية ↗",
+                "href": "https://www.kkia.sa/ar-sa/parking-and-transport/metro",
+                "url": "https://www.kkia.sa/ar-sa/parking-and-transport/metro",
+                "external": true
+              }
+            ],
+            "tags": [
+              "مشروع رياض مترو",
+              "قطار الرياض",
+              "مطار الملك خالد الدولي",
+              "تطبيق درب"
+            ]
+          },
+          {
+            "id": "ala-khutah",
+            "category": "mega",
+            "emblem": "trail",
+            "impactBadge": "محتوى وسيناريو سردي",
+            "meta": "مشروع ثقافي وتاريخي · كتابة المحتوى والسيناريو",
+            "title": "مشروع «على خطاه»",
+            "summary": "كتابة المحتوى الإبداعي والسيناريو السردي للمشروع الثقافي والتاريخي الذي يوثق ويحاكي مسار الهجرة النبوية الشريفة بأسلوب قصصي وإنساني معاصر.",
+            "body": [
+              "كتابة المحتوى الإبداعي والسيناريو السردي لمشروع «على خطاه» الثقافي والتاريخي الذي يوثق ويحاكي مسار الهجرة النبوية الشريفة بأسلوب قصصي وإنساني معاصر يجمع بين الأصالة التاريخية والتجربة الإثرائية."
+            ],
+            "tags": [
+              "على خطاه",
+              "كتابة السيناريو",
+              "السرد القصصي",
+              "المشاريع الوطنية"
+            ]
+          },
+          {
+            "id": "riyadh-season",
+            "category": "seasons",
+            "emblem": "crown",
+            "impactBadge": "الكتيب الرسمي · مناطق وبطولات عالمية",
+            "meta": "الهيئة العامة للترفيه · شركة صلة",
+            "title": "موسم الرياض",
+            "summary": "صياغة وتوطين المحتوى الإبداعي والتعريفي ثنائي اللغة لمناطق وبطولات موسم الرياض والكتيب الرسمي لموسم 2026–2027.",
+            "body": [
+              "صياغة وتوطين المحتوى الإبداعي والتعريفي ثنائي اللغة لمناطق وبطولات موسم الرياض والكتيب الرسمي لموسم 2026–2027، شاملاً بوليفارد وورلد، بوليفارد سيتي، وندر جاردن، ڤيا رياض، ذا جروفز، شتاء الديرة، سوق المزارعين، حديقة السويدي، متاهة الحصن، وسڤن الحمراء، وبطولات Six Kings Slam وWWE Crown Jewel وWrestleMania 43 وUFC وجوائز MENA Effie Awards."
+            ],
+            "tags": [
+              "موسم الرياض",
+              "بوليفارد وورلد",
+              "WrestleMania 43",
+              "شركة صلة"
+            ]
+          },
+          {
+            "id": "jeddah-season",
+            "category": "seasons",
+            "emblem": "crown",
+            "impactBadge": "محتوى تسويقي وخطط اتصال 360°",
+            "meta": "موسم جدة · شركة صلة",
+            "title": "موسم جدة",
+            "summary": "صياغة وتوطين المحتوى التسويقي والاتصالي لفعاليات وتجارب موسم جدة والخطط المتكاملة لفعالياته الكبرى (بما فيها خطة سباق الترايثلون العالمي T100 جدة).",
+            "body": [
+              "صياغة وتوطين المحتوى التسويقي والاتصالي والحملات الترويجية لفعاليات وتجارب موسم جدة باللغتين العربية والإنجليزية.",
+              "إعداد خطط التسويق والاتصال المتكاملة (360°) لفعالياته الكبرى، بما فيها خطة التسويق والاتصال لسباق الترايثلون العالمي «T100 جدة» (سباقات 100 كم وSprint وسباقات الجري المجتمعية 5 كم و1 كم)."
+            ],
+            "tags": [
+              "موسم جدة",
+              "T100 جدة",
+              "توطين المحتوى",
+              "شركة صلة"
+            ]
+          },
+          {
+            "id": "qatif-season",
+            "category": "seasons",
+            "emblem": "crown",
+            "impactBadge": "صياغة إبداعية وتوطين ثقافي",
+            "meta": "المواسم السعودية · شركة صلة",
+            "title": "موسم القطيف",
+            "summary": "كتابة وتوطين المحتوى الإبداعي والحملات الترويجية والتعريفية لفعاليات وتجارب موسم القطيف باللغتين العربية والإنجليزية.",
+            "body": [
+              "كتابة وتوطين المحتوى الإبداعي والحملات الترويجية والتعريفية وأدلة الزوار لفعاليات وتجارب موسم القطيف باللغتين العربية والإنجليزية، بما يعكس الهوية الثقافية والتراثية الأصيلة للمنطقة ويخاطب مختلف شرائح الزوار."
+            ],
+            "tags": [
+              "موسم القطيف",
+              "محتوى إبداعي",
+              "توطين ثقافي",
+              "شركة صلة"
+            ]
+          },
+          {
+            "id": "tourism-visit-jeddah",
+            "category": "seasons",
+            "emblem": "roshan",
+            "impactBadge": "عروض فنية · Visit Jeddah",
+            "meta": "وزارة السياحة · مبادرات زيارة جدة",
+            "title": "مشاريع وزارة السياحة و Visit Jeddah",
+            "summary": "إعداد وتحرير وترجمة العروض الفنية والمبادرات التسويقية لوزارة السياحة، وصياغة محتوى الوجهات والتجارب السياحية ضمن مبادرات «زيارة جدة» (Visit Jeddah).",
+            "body": [
+              "إعداد وتحرير وترجمة العروض الفنية والملفات التسويقية لوزارة السياحة بما يتوافق بدقة مع الخطاب المؤسسي الرسمي ومعايير التقييم المعتمدة.",
+              "كتابة وتوطين محتوى الوجهات والتجارب السياحية والحملات الترويجية ضمن مبادرات «زيارة جدة» (Visit Jeddah) لإبراز المقومات الساحلية والتراثية والفعاليات النوعية."
+            ],
+            "tags": [
+              "وزارة السياحة",
+              "Visit Jeddah",
+              "زيارة جدة",
+              "عروض فنية"
+            ]
+          },
+          {
             "id": "pr-formula-e",
+            "category": "sports",
+            "emblem": "circuit",
+            "impactBadge": "7.5 مليار وصول · 61 دولة",
             "meta": "وزارة الرياضة · شركة صلة",
             "title": "بطولة العالم «إيه بي بي فورمولا إي» — جدة إي بري 2026",
             "summary": "قيادة المحتوى الاتصالي والمركز الإعلامي والدليل والتقرير الختامي — 2,512 تغطية في 61 دولة بوصول 7.5 مليار وقيمة إعلامية 191 مليون دولار.",
@@ -1323,6 +1549,9 @@ window.SITE_DATA = {
           },
           {
             "id": "pr-super-cup",
+            "category": "sports",
+            "emblem": "crest",
+            "impactBadge": "47,492 تغطية · 170 دولة",
             "meta": "وزارة الرياضة · شركة صلة",
             "title": "بطولة كأس السوبر الإسباني 2026 في جدة",
             "summary": "الخطة الإعلامية الشاملة و52 مادة صحفية ثنائية اللغة و20 فيديو — 47,492 تغطية في 170 دولة بوصول 1.2 مليار وقيمة إعلامية 389 مليون دولار.",
@@ -1337,22 +1566,10 @@ window.SITE_DATA = {
             ]
           },
           {
-            "id": "pr-riyadh-season",
-            "meta": "الهيئة العامة للترفيه · شركة صلة",
-            "title": "موسم الرياض 2026–2027 — الكتيب الرسمي ومحتوى المناطق والفعاليات العالمية",
-            "summary": "صياغة وتوطين المحتوى الإبداعي ثنائي اللغة للكتيب الرسمي ومناطق وبطولات موسم الرياض العالمية بما فيها WrestleMania 43 وSix Kings Slam وUFC.",
-            "body": [
-              "صياغة وتوطين المحتوى الإبداعي والتعريفي ثنائي اللغة للكتيب الرسمي ووجهات وبطولات موسم الرياض 2026–2027، شاملاً بطولات Six Kings Slam وWWE Crown Jewel وWrestleMania 43 وUFC وجوائز MENA Effie Awards، ومناطق بوليفارد وورلد، بوليفارد سيتي، وندر جاردن، ڤيا رياض، ذا جروفز، شتاء الديرة، سوق المزارعين، حديقة السويدي، متاهة الحصن، وسڤن الحمراء."
-            ],
-            "tags": [
-              "موسم الرياض",
-              "بوليفارد وورلد",
-              "WrestleMania 43",
-              "شركة صلة"
-            ]
-          },
-          {
             "id": "pr-school-league",
+            "category": "sports",
+            "emblem": "laurel",
+            "impactBadge": "خطة 8 أسابيع · علاقات عامة",
             "meta": "وزارة الرياضة ووزارة التعليم · شركة صلة",
             "title": "دوري المدارس 2025–2026 — الخطة الإعلامية والعلاقات العامة",
             "summary": "الخطة الاتصالية والتسويقية الشاملة للبنين والبنات، خطة نشر لـ 8 أسابيع، استراتيجية المؤثرين، ودليل إدارة الأزمات.",
@@ -1365,83 +1582,24 @@ window.SITE_DATA = {
               "وزارة التعليم",
               "علاقات عامة"
             ]
+          }
+        ],
+        "projectFilters": [
+          {
+            "id": "all",
+            "label": "الكل"
           },
           {
-            "id": "pr-t100-jeddah",
-            "meta": "موسم جدة · شركة صلة",
-            "title": "سباق الترايثلون العالمي T100 جدة — خطة التسويق والاتصال المتكاملة",
-            "summary": "خطة التسويق والاتصال المتكاملة (360°) لسباقات 100 كم وSprint وسباقات الجري المجتمعية ضمن موسم جدة.",
-            "body": [
-              "إعداد خطة التسويق والاتصال المتكاملة (360°) لسباق «T100 جدة» ضمن موسم جدة (سباقات 100 كم وSprint وسباقات الجري المجتمعية 5 كم و1 كم)، شاملاً صياغة رسائل الفئات المستهدفة، مزيج القنوات الإعلانية المدفوعة، خطة النشر وصنّاع المحتوى، والتغطية الإعلامية والعلاقات العامة."
-            ],
-            "tags": [
-              "T100 جدة",
-              "موسم جدة",
-              "خطة تسويقية",
-              "شركة صلة"
-            ]
+            "id": "sports",
+            "label": "الرياضة العالمية"
           },
           {
-            "id": "pr-coastal-seasons",
-            "meta": "المواسم والوجهات السياحية",
-            "title": "بوليفارد وورلد - موسم جدة - موسم القطيف - مبادرات «زيارة جدة»",
-            "summary": "صياغة وتوطين محتوى الحملات الإبداعية والرسائل الترويجية لأبرز المواسم والوجهات السياحية.",
-            "body": [
-              "كتابة وتوطين المحتوى التسويقي والحملات الإعلانية وأدلة الزوار باللغتين العربية والإنجليزية لأبرز المواسم والوجهات، بما يشمل بوليفارد وورلد، وموسم جدة، وموسم القطيف، ومبادرات «زيارة جدة».",
-              "بناء رسائل تواصل متوازنة تدمج السرد الإبداعي والموشن جرافيك وتخاطب الجمهور المحلي والزوار الدوليين."
-            ],
-            "tags": [
-              "بوليفارد وورلد",
-              "موسم جدة",
-              "موسم القطيف",
-              "زيارة جدة"
-            ]
+            "id": "seasons",
+            "label": "المواسم والسياحة"
           },
           {
-            "id": "pr-tourism",
-            "meta": "الجهات الحكومية والعروض الفنية",
-            "title": "العروض الفنية والمبادرات التسويقية لوزارة السياحة",
-            "summary": "إعداد وتحرير وترجمة العروض الفنية والمواد التسويقية وفق الخطاب المؤسسي الرسمي.",
-            "body": [
-              "إعداد وتحرير وترجمة العروض الفنية والملفات التسويقية لوزارة السياحة بما يتوافق بدقة مع الخطاب الرسمي ومتطلبات التقديم المؤسسي.",
-              "صياغة وتوطين المحتوى الإستراتيجي والعروض التقديمية لإبراز المقومات السياحية والفرص التطويرية باللغتين العربية والإنجليزية."
-            ],
-            "tags": [
-              "وزارة السياحة",
-              "عروض فنية",
-              "محتوى مؤسسي"
-            ]
-          },
-          {
-            "id": "pr-national",
-            "meta": "مشاريع وطنية كبرى",
-            "title": "مشروع قطار الرياض - مشروع «على خطاه»",
-            "summary": "المحتوى المؤسسي والسرد الإعلامي والثقافي للمشاريع الوطنية الكبرى.",
-            "body": [
-              "المساهمة في إعداد وصياغة المحتوى المؤسسي والإعلامي ثنائي اللغة لمشاريع وطنية بارزة تشمل مشروع قطار الرياض ومشروع «على خطاه».",
-              "تقديم صياغة رصينة تجمع بين الدقة المؤسسية والجاذبية الإعلامية بالعربية والإنجليزية."
-            ],
-            "tags": [
-              "قطار الرياض",
-              "مشروع على خطاه",
-              "مشاريع وطنية"
-            ]
-          },
-          {
-            "id": "pr-mbc",
-            "meta": "إعلام وهويات تلفزيونية · 2012 – 2023",
-            "title": "الهويات البصرية والبروموهات التلفزيونية — مجموعة MBC وتلفزيون عيون الوطن",
-            "summary": "التعاون مع مجموعة MBC في المونتاج والإخراج، والإدارة الإبداعية والهويات البصرية في تلفزيون عيون الوطن.",
-            "body": [
-              "التعاون مع مجموعة MBC في تنفيذ أعمال المونتاج والإخراج، وشغل منصب مدير إبداعي في تلفزيون عيون الوطن خلال الفترة من 2012 إلى 2023.",
-              "الإشراف الكامل على الهويات البصرية للمحطات والبروموهات التلفزيونية وتصميم الشارات والرسومات المتحركة باستخدام المونتاج والموشن جرافيك."
-            ],
-            "tags": [
-              "مجموعة MBC",
-              "تلفزيون عيون الوطن",
-              "هويات بصرية",
-              "بروموهات"
-            ]
+            "id": "mega",
+            "label": "المشاريع الوطنية الكبرى"
           }
         ]
       }

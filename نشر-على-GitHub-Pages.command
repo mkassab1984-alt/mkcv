@@ -119,13 +119,20 @@ def main():
     default_branch = repo_info.get("default_branch", "main") or "main"
     skip_ext = (".command", ".bat")
     files_to_upload = {".nojekyll": b""}
+    canonical_base = f"https://{owner}.github.io/" if repo == root_repo else f"https://{owner}.github.io/{repo}/"
     for dirpath, _, filenames in os.walk(ROOT_DIR):
         for fn in filenames:
             if fn == ".DS_Store" or fn.endswith(skip_ext):
                 continue
             full_p = os.path.join(dirpath, fn)
             rel_p = os.path.relpath(full_p, ROOT_DIR).replace("\\", "/")
-            files_to_upload[rel_p] = open(full_p, "rb").read()
+            raw_b = open(full_p, "rb").read()
+            if rel_p in ("index.html", "standalone.html"):
+                raw_b = raw_b.replace(
+                    b'content="og-preview.png"',
+                    f'content="{canonical_base}og-preview.png"'.encode("utf-8"),
+                )
+            files_to_upload[rel_p] = raw_b
 
     st_ref, ref_info = http_json(f"https://api.github.com/repos/{owner}/{repo}/git/ref/heads/{default_branch}", headers=auth_hdr)
     if st_ref != 200:
