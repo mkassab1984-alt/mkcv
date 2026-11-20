@@ -23,18 +23,21 @@
   const playlistYtHintEl = document.getElementById("playlist-yt-hint");
 
   // =========================================================================
-  // WORLD-SPACE CONSTANTS & MATTE LITHOGRAPH CHALK PALETTE (ZERO PURE WHITE)
+  // WORLD-SPACE CONSTANTS & ARCHIVAL MOONLIT SLATE-CHARCOAL PALETTE (ZERO pure-white)
   // =========================================================================
-  const SKY_CORE = "#001f3f";
-  const SKY_LIFT = "#002244";
-  const SKY_EDGE = "#001f3f";
-  const EARTH_CORE = "#00152b";
+  const SKY_LIFT = "#23272F";
+  const SKY_CORE = "#1C1F26";
+  const SKY_EDGE = "#161920";
+  const EARTH_CORE = "#13161C";
+  const EARTH_DEEP = "#0E1015";
 
-  // Warm matte silver-chalk inks (never harsh pure white)
-  const CHALK = "#C6CAD2";
-  const CHALK_TREE = "#C4C8D2";
-  const CHALK_BRIGHT = "#DCE0E8";
-  const CHALK_MUTED = "#9AA2B2";
+  // Warm archival silver-bone chalk inks (strictly zero pure pure-white)
+  const CHALK = "#C8CBD2";
+  const CHALK_TREE = "#C8CBD2";
+  const CHALK_BRIGHT = "#DFE2E8";
+  const CHALK_MUTED = "#9499A6";
+  const SHADOW_INK = "#0D1016";
+  const PILL_BG = "#C3C6CD";
   const RIVER_BOULDER = "#B8BCC6";
 
   const TREE_W = 640;
@@ -87,7 +90,18 @@
 
   let lang = "en";
   let activeBranch = null;
+  let closingBranch = null;
   let activeItem = null;
+  let activeExpYear = null;
+  let closingExpYear = null;
+  let expYearShootRaw = 0;
+  let expYearShootGrow = 0;
+  const expandedItems = new Set();
+  const closingItems = new Set();
+
+  // Gentle wind-sway impulse on the olive tree crown when a retracting branch merges home
+  let crownRustleImpulse = 0;
+  let crownRustlePhase = 0;
 
   // Entrance & choreographed branch / discrete typewriter state [0..1]
   let firstFrameMs = null;
@@ -103,6 +117,7 @@
 
   let expBoughRaw = 0;
   let expBoughGrow = 0;
+  let expBoughRetracting = false;
   let meProjectsHeadingType = 0;
   let meProjectsHeadingErasing = false;
   let meProjectFilter = "all";
@@ -111,16 +126,38 @@
   const mainLabelType = { work: 0, experience: 0, writing: 0, me: 0 };
   const mainLabelErasing = { work: false, experience: false, writing: false, me: false };
   const underlineProg = { work: 0, experience: 0, writing: 0, me: 0 };
+  const branchRaw = { work: 0, experience: 0, writing: 0, me: 0 };
+  const branchRetracting = { work: false, experience: false, writing: false, me: false };
   const branchLimbGrow = { work: 0, experience: 0, writing: 0, me: 0 };
+  const branchGrow = branchLimbGrow;
 
+  const subTwigRaw = {};
   const subTwigGrow = {};
   const itemType = {};
   const itemErasing = {};
   const siblingSumFactor = {};
+  const itemRaw = {};
   const lvl2ShootGrow = {};
+  const itemGrow = lvl2ShootGrow;
   const lvl2Type = {};
   const lvl2Erasing = {};
   const hoverAmt = {};
+
+  // Stippled Risograph Chalk Text Patterns (128x128 seamless CanvasPattern tiles)
+  let chalkPatternPrimary = null;
+  let chalkPatternActive = null;
+  let chalkPatternMuted = null;
+  const chalkPatternTiles = { primary: null, active: null, muted: null };
+  let frameChalkPatternCalls = 0;
+  let totalChalkPatternCalls = 0;
+
+  // 10 Dual-Buffer (256x198) 45-deg Halftone + Full-Color Taped Zine Project Cards
+  const projectPhotoCards = {};
+  const projectHalftoneCards = projectPhotoCards;
+  const projectPhotoHover = {};
+  const projectPhotoLift = {};
+  const projectPhotoLoadState = {};
+  let lastMeProjectPhotoBoxes = [];
 
   // Viewport & Choreographed Spring Camera
   let vw = window.innerWidth;
@@ -272,6 +309,16 @@
     return 1 - u * u * u;
   }
 
+  function easeInOutCubic(t) {
+    const x = clamp(t, 0, 1);
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  }
+
+  function easeOrganicBranch(t) {
+    const x = clamp(t, 0, 1);
+    return 0.42 * easeOutCubic(x) + 0.58 * easeInOutCubic(x);
+  }
+
   function smoothstep(edge0, edge1, x) {
     const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
@@ -294,11 +341,20 @@
     return 2.4 + wave * trunkFlatten;
   }
 
+  function triggerCrownRustle(strength) {
+    crownRustleImpulse = Math.max(crownRustleImpulse, clamp(strength || 1.0, 0, 1.5));
+  }
+
   function computeCanopySway(wy, timeSec) {
     if (wy >= -220) return 0;
     const rise = smoothstep(220, 540, -wy);
     const phaseY = (-wy - 220) / 340;
-    return Math.sin(timeSec * 0.82 + phaseY * 3.6) * rise * 2.2;
+    const ambient = Math.sin(timeSec * 0.82 + phaseY * 3.6) * rise * 2.2;
+    const rustle =
+      crownRustleImpulse > 0.002
+        ? Math.sin(crownRustlePhase * 5.6 - phaseY * 2.2) * crownRustleImpulse * 4.5 * rise
+        : 0;
+    return ambient + rustle;
   }
 
   function getLocale() {
@@ -319,9 +375,168 @@
   }
 
   // =========================================================================
-  // UNIVERSAL MATTE CHALK CANVAS TEXT RENDERER (strokeText + fillText)
+  // PRE-BAKED 128x128 SEAMLESS STIPPLED CHALK PATTERNS & LETTERPRESS TEXT
   // Preserves 100% connected Arabic cursive shaping by passing whole line slices!
   // =========================================================================
+  function buildStippledChalkPatternTile(baseRGB, poreRGB1, poreRGB2, grainRGB, seed) {
+    if (typeof document === "undefined") return { tile: null, pattern: null, poreCount: 0, grainCount: 0 };
+    const SIZE = 128;
+    const tile = document.createElement("canvas");
+    tile.width = SIZE;
+    tile.height = SIZE;
+    const tg = tile.getContext("2d");
+    let poreCount = 0;
+    let grainCount = 0;
+
+    if (tg) {
+      tg.fillStyle = `rgb(${baseRGB[0]}, ${baseRGB[1]}, ${baseRGB[2]})`;
+      tg.fillRect(0, 0, SIZE, SIZE);
+
+      let img = null;
+      try {
+        if (typeof tg.createImageData === "function") {
+          img = tg.createImageData(SIZE, SIZE);
+        } else if (typeof tg.getImageData === "function") {
+          img = tg.getImageData(0, 0, SIZE, SIZE);
+        }
+      } catch (_) {}
+
+      const prng = mulberry32(seed);
+      if (img && img.data && img.data.length === SIZE * SIZE * 4) {
+        const px = img.data;
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) {
+            const idx = (y * SIZE + x) * 4;
+            const bn = blueNoise2D((x + seed) & 127, (y + (seed >> 3)) & 127);
+            const score = (bn + prng() * 0.27) % 1.0;
+            let r = baseRGB[0];
+            let g = baseRGB[1];
+            let b = baseRGB[2];
+            if (score < 0.20) {
+              const useDeep = prng() < 0.46;
+              const pCol = useDeep ? poreRGB2 : poreRGB1;
+              r = pCol[0];
+              g = pCol[1];
+              b = pCol[2];
+              poreCount++;
+            } else if (score > 0.86) {
+              r = grainRGB[0];
+              g = grainRGB[1];
+              b = grainRGB[2];
+              grainCount++;
+            } else {
+              const jit = Math.round((prng() - 0.5) * 5);
+              r = clamp(r + jit, 0, 236);
+              g = clamp(g + jit, 0, 239);
+              b = clamp(b + jit, 0, 244);
+            }
+            px[idx] = r;
+            px[idx + 1] = g;
+            px[idx + 2] = b;
+            px[idx + 3] = 255;
+          }
+        }
+        try {
+          tg.putImageData(img, 0, 0);
+        } catch (_) {}
+      } else {
+        // Fallback procedural 1px stipple rects when ImageData is unavailable
+        for (let y = 0; y < SIZE; y++) {
+          for (let x = 0; x < SIZE; x++) {
+            const score = (blueNoise2D(x, y) + prng() * 0.27) % 1.0;
+            if (score < 0.20) {
+              const pCol = prng() < 0.46 ? poreRGB2 : poreRGB1;
+              tg.fillStyle = `rgb(${pCol[0]}, ${pCol[1]}, ${pCol[2]})`;
+              tg.fillRect(x, y, 1, 1);
+              poreCount++;
+            } else if (score > 0.86) {
+              tg.fillStyle = `rgb(${grainRGB[0]}, ${grainRGB[1]}, ${grainRGB[2]})`;
+              tg.fillRect(x, y, 1, 1);
+              grainCount++;
+            }
+          }
+        }
+      }
+    }
+
+    let pat = null;
+    if (ctx && typeof ctx.createPattern === "function") {
+      try {
+        pat = ctx.createPattern(tile, "repeat");
+      } catch (_) {}
+    }
+    return { tile, pattern: pat, poreCount, grainCount };
+  }
+
+  function initChalkTextPatterns() {
+    const prim = buildStippledChalkPatternTile(
+      [200, 203, 210], // #C8CBD2 primary chalk
+      [159, 164, 176], // #9FA4B0 ink pore
+      [133, 138, 150], // #858A96 deep pore
+      [215, 218, 226], // #D7DAE2 chalk grain (zero pure-white)
+      62091411
+    );
+    const act = buildStippledChalkPatternTile(
+      [223, 226, 232], // #DFE2E8 hover/active glow
+      [172, 177, 189], // #ACB1BD ink pore
+      [150, 155, 168], // #969BA8 deep pore
+      [233, 236, 242], // #E9ECF2 chalk highlight (strictly < pure-white)
+      62091422
+    );
+    const mut = buildStippledChalkPatternTile(
+      [148, 153, 166], // #9499A6 muted metadata
+      [118, 123, 136], // #767B88 ink pore
+      [102, 107, 120], // #666B78 deep pore
+      [172, 177, 190], // #ACB1BE chalk grain
+      62091433
+    );
+
+    chalkPatternPrimary = prim.pattern;
+    chalkPatternActive = act.pattern;
+    chalkPatternMuted = mut.pattern;
+    chalkPatternTiles.primary = prim;
+    chalkPatternTiles.active = act;
+    chalkPatternTiles.muted = mut;
+  }
+
+  function resolveChalkFillStyle(fillColor) {
+    if (!fillColor) {
+      if (chalkPatternPrimary) {
+        frameChalkPatternCalls++;
+        totalChalkPatternCalls++;
+        return chalkPatternPrimary;
+      }
+      return CHALK;
+    }
+    if (typeof fillColor !== "string") return fillColor;
+    const norm = fillColor.trim().toUpperCase();
+    if (norm === "#C8CBD2" || norm === "#C6CAD2" || norm === "#C4C8D2") {
+      if (chalkPatternPrimary) {
+        frameChalkPatternCalls++;
+        totalChalkPatternCalls++;
+        return chalkPatternPrimary;
+      }
+      return CHALK;
+    }
+    if (norm === "#DFE2E8" || norm === "#DCE0E8") {
+      if (chalkPatternActive) {
+        frameChalkPatternCalls++;
+        totalChalkPatternCalls++;
+        return chalkPatternActive;
+      }
+      return CHALK_BRIGHT;
+    }
+    if (norm === "#9499A6" || norm === "#9AA2B2") {
+      if (chalkPatternMuted) {
+        frameChalkPatternCalls++;
+        totalChalkPatternCalls++;
+        return chalkPatternMuted;
+      }
+      return CHALK_MUTED;
+    }
+    return fillColor;
+  }
+
   function drawChalkText(str, x, y, fillColor, fontSizePx, alphaMul) {
     if (!str) return "";
     const fs = Number.isFinite(fontSizePx) && fontSizePx > 0 ? fontSizePx : parseFontSizePx(ctx.font);
@@ -332,19 +547,19 @@
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.miterLimit = 2;
-    ctx.lineWidth = Math.max(2.6, fs * 0.21);
-    ctx.strokeStyle = "rgba(0, 15, 32, 0.92)";
-    ctx.shadowColor = "rgba(0, 9, 20, 0.85)";
-    ctx.shadowBlur = 2.2;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 1.4;
+    ctx.lineWidth = Math.max(1.25, fs * 0.09);
+    ctx.strokeStyle = "rgba(9, 11, 16, 0.84)";
+    ctx.shadowColor = "rgba(6, 8, 12, 0.88)";
+    ctx.shadowBlur = 0.9;
+    ctx.shadowOffsetX = 0.85;
+    ctx.shadowOffsetY = 1.25;
     ctx.strokeText(str, x, y);
 
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-    ctx.fillStyle = fillColor || CHALK;
+    ctx.fillStyle = resolveChalkFillStyle(fillColor);
     ctx.fillText(str, x, y);
     ctx.restore();
 
@@ -559,7 +774,7 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (glowAlpha && glowAlpha > 0.04) {
-      ctx.shadowColor = "rgba(220, 224, 232, 0.55)";
+      ctx.shadowColor = "rgba(223, 226, 232, 0.52)";
       ctx.shadowBlur = 3.5 * glowAlpha;
     }
 
@@ -771,7 +986,7 @@
     ctx.lineWidth = Math.min(1.25, lineWidth || 1.15);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(0, 9, 20, 0.78)";
+    ctx.shadowColor = "rgba(6, 8, 12, 0.86)";
     ctx.shadowBlur = 1.5;
     ctx.shadowOffsetY = 1.0;
     ctx.beginPath();
@@ -888,13 +1103,13 @@
 
   function computeHomeCamera() {
     const hb = computeHomeWorldBounds();
-    const isPhone = vw < 640;
+    const isPhone = vw < 680;
     const isPortraitOrCompact = vw < 960 || vh >= vw;
 
     if (isPortraitOrCompact) {
-      const sidePad = vw < 430 ? 15 : 22;
-      const topClearance = isPhone ? 86 : 74;
-      const botClearance = isPhone ? 102 : 76;
+      const sidePad = vw < 430 ? 22 : 28;
+      const topClearance = isPhone ? 92 : 82;
+      const botClearance = isPhone ? 108 : 86;
       const horizZoom = (vw - sidePad * 2) / hb.spanX;
       const vertZoom = (vh - topClearance - botClearance) / Math.max(560, hb.spanY);
       const homeZoom = clamp(Math.min(horizZoom, vertZoom), 0.38, 1.05);
@@ -910,7 +1125,7 @@
       };
     }
 
-    const sideMargin = 24;
+    const sideMargin = 34;
     const treeScreenX = clamp(vw * 0.46, vw * 0.38, vw * 0.52);
     const availLeft = Math.max(160, treeScreenX - sideMargin);
     const availRight = Math.max(160, vw - treeScreenX - sideMargin);
@@ -918,8 +1133,8 @@
       availLeft / Math.max(240, Math.abs(hb.minWX)),
       availRight / Math.max(240, hb.maxWX)
     );
-    const groundScreenY = vh - 12;
-    const topClearance = 38;
+    const groundScreenY = vh - 18;
+    const topClearance = 44;
     const vertZoom = (groundScreenY - topClearance) / 568;
     const homeZoom = clamp(Math.min(vertZoom, horizZoom), 0.38, 1.24);
 
@@ -933,9 +1148,9 @@
   function fitWorldBox(minX, maxX, minY, maxY, padBotOverride) {
     const isPhone = vw < 680;
     const isTablet = vw >= 680 && vw < 1024;
-    const padX = isPhone ? 16 : isTablet ? 34 : 68;
-    const padTop = isPhone ? 52 : 46;
-    const padBot = typeof padBotOverride === "number" ? padBotOverride : (isPhone ? 68 : 72);
+    const padX = isPhone ? 22 : isTablet ? 38 : 72;
+    const padTop = isPhone ? 56 : 52;
+    const padBot = typeof padBotOverride === "number" ? padBotOverride : (isPhone ? 74 : 78);
     const boxW = Math.max(200, maxX - minX);
     const boxH = Math.max(170, maxY - minY);
 
@@ -1067,7 +1282,11 @@
     });
 
     let totalH = 0;
-    for (const mi of measuredItems) totalH += mi.blockH;
+    for (const mi of measuredItems) {
+      const expandReflow = 12 * (itemGrow[mi.item.id] || 0);
+      mi.expandReflow = expandReflow;
+      totalH += mi.blockH + expandReflow;
+    }
     totalH += Math.max(0, measuredItems.length - 1) * vGap;
 
     let topY = forkY - totalH * 0.5;
@@ -1097,7 +1316,7 @@
       mi.lvl2BoxLeft = dir < 0 ? mi.lvl2TipX - 14 - detailColWidth : mi.lvl2TipX + 14;
       mi.lvl2BoxRight = mi.lvl2BoxLeft + detailColWidth;
 
-      cursorY += mi.blockH + vGap;
+      cursorY += mi.blockH + (mi.expandReflow || 0) + vGap;
     }
 
     const bottomY = cursorY - vGap;
@@ -1123,7 +1342,7 @@
 
   // Preserve custom botanical twig-leaf-dot SVG inside #btn-back (never overwrite textContent!)
   function syncBackButton() {
-    const showBack = Boolean(activeBranch || activeItem);
+    const showBack = Boolean(activeBranch || (activeItem && !closingExpYear));
     if (btnBack) {
       btnBack.hidden = !showBack;
     }
@@ -1435,7 +1654,13 @@
     ctx.font = canvasFont("600 15.2px", projectsHeading);
     const projectsHeadingW = ctx.measureText(projectsHeading).width;
 
-    const projColW = isStackMobile ? bioColW : isCompactTablet ? 356 : 402;
+    // Reserve dedicated outer photoColW (left in AR RTL, right in EN LTR) + 18px pure sky buffer -> 0 px² overlap!
+    const photoW = isStackMobile ? 68 : 84;
+    const photoH = isStackMobile ? 54 : 66;
+    const photoColW = isStackMobile ? 84 : 104;
+    const photoTextGap = 18;
+    const projColW = isStackMobile ? 314 : isCompactTablet ? 416 : 472;
+    const textColW = projColW - photoColW - photoTextGap;
     const projDetailW = isStackMobile ? 276 : isCompactTablet ? 316 : 344;
     const projLeft = bioLeft;
     const projRight = projLeft + projColW;
@@ -1477,32 +1702,43 @@
     }
     const filtersBottomY = filterTopY + filterRows.length * filterRowH;
 
-    const projVGap = isStackMobile ? 18 : 22;
+    const projVGap = isStackMobile ? 20 : 24;
     const titleStepY = rtl ? 24.5 : 20.2;
     const sumStepY = rtl ? 19.2 : 16.4;
 
     const visibleItems = (bCfg.items || []).filter((it) => isMeProjectMatchingFilter(it));
-    let projCursorY = filtersBottomY + 16;
+    let projCursorY = filtersBottomY + 18;
 
     const measuredProjects = visibleItems.map((it, idx) => {
       const badgeStr = it.impactBadge || "";
       const badgeFontPx = rtl || hasArabicChars(badgeStr) ? 10.6 : 10.2;
       ctx.font = `500 ${badgeFontPx}px ${fontFamilyFor(badgeStr)}`;
       const badgeTextW = badgeStr ? ctx.measureText(badgeStr).width : 0;
-      const badgePillW = badgeStr ? Math.ceil(badgeTextW + 16) : 0;
+      const badgePillW = badgeStr ? Math.min(textColW - 24, Math.ceil(badgeTextW + 16)) : 0;
 
       const metaStr = it.meta || "";
       const metaFontPx = rtl || hasArabicChars(metaStr) ? 10.8 : 10.2;
-      ctx.font = `500 ${metaFontPx}px ${fontFamilyFor(metaStr)}`;
+      const metaFontSpec = `500 ${metaFontPx}px ${fontFamilyFor(metaStr)}`;
+      ctx.font = metaFontSpec;
       const metaW = metaStr ? ctx.measureText(metaStr).width : 0;
 
       const emblemSlotW = 22;
-      const metaInline = Boolean(metaStr && (emblemSlotW + badgePillW + 12 + metaW <= projColW));
-      const headerH = 22 + (metaStr && !metaInline ? 16.5 : 0);
+      const metaInline = Boolean(metaStr && (emblemSlotW + badgePillW + 12 + metaW <= textColW));
+      const metaLines = metaStr && !metaInline ? wrapLines(metaStr, textColW - 4, metaFontSpec) : (metaStr ? [metaStr] : []);
+      const headerH = 22 + (metaStr && !metaInline ? metaLines.length * 15.5 + 1.5 : 0);
 
-      const titleLines = wrapLines(it.title, projColW, canvasFont("600 13.6px", it.title + "  +"));
-      const sumLines = wrapLines(it.summary, projColW, canvasFont("400 12.3px", it.summary));
-      const blockH = headerH + titleLines.length * titleStepY + 3 + sumLines.length * sumStepY + 8;
+      const titleLines = wrapLines(it.title, textColW - 4, canvasFont("600 13.6px", it.title + "  +"));
+      const sumLines = wrapLines(it.summary, textColW - 2, canvasFont("400 12.3px", it.summary));
+      const textBlockH = headerH + titleLines.length * titleStepY + 3 + sumLines.length * sumStepY + 8;
+      const minPhotoBlockH = photoH + (isStackMobile ? 16 : 20);
+      const blockH = Math.max(textBlockH, minPhotoBlockH);
+      const expandReflow = 12 * (itemGrow[it.id] || 0);
+
+      // Inner text sub-column vs outer taped halftone photo sub-column
+      const textLeft = rtl ? projLeft + photoColW + photoTextGap : projLeft;
+      const textRight = textLeft + textColW;
+      const photoSlotLeft = rtl ? projLeft : textRight + photoTextGap;
+      const photoSlotRight = photoSlotLeft + photoColW;
 
       const bodyParas = (it.body || []).map((p) =>
         wrapLines(p, projDetailW, canvasFont("400 13px", p))
@@ -1524,13 +1760,13 @@
 
       const topY = projCursorY;
       const jointY = topY + 11;
-      const lvl2StartX = rtl ? vineX + 10 : projRight + 12;
+      const lvl2StartX = rtl ? vineX + 10 : projRight + 14;
       const lvl2TipX = lvl2StartX + (isStackMobile ? 42 : 66);
       const lvl2TopY = topY - 4;
       const lvl2BoxLeft = lvl2TipX + 16;
       const lvl2BoxRight = lvl2BoxLeft + projDetailW;
 
-      projCursorY += blockH + projVGap;
+      projCursorY += blockH + expandReflow + projVGap;
 
       return {
         item: it,
@@ -1543,16 +1779,28 @@
         badgeTextW,
         badgePillW,
         metaStr,
+        metaLines,
         metaFontPx,
         metaW,
         metaInline,
         titleStepY,
         sumStepY,
+        textBlockH,
         blockH,
+        expandReflow,
         detailH,
         projLeft,
         projRight,
         projColW,
+        textColW,
+        textLeft,
+        textRight,
+        photoW,
+        photoH,
+        photoColW,
+        photoTextGap,
+        photoSlotLeft,
+        photoSlotRight,
         projDetailW,
         titleLines,
         sumLines,
@@ -1619,6 +1867,11 @@
       filterRows,
       filtersBottomY,
       projColW,
+      textColW,
+      photoW,
+      photoH,
+      photoColW,
+      photoTextGap,
       projDetailW,
       projLeft,
       projRight,
@@ -1730,7 +1983,7 @@
 
     if (activeBranch === "experience") {
       const expLay = computeExperienceBoughLayout(bCfg);
-      if (activeItem) {
+      if (activeItem && !closingExpYear) {
         const yn = expLay.yearNodes.find((n) => n.item.id === activeItem);
         if (yn) {
           if (isMobile) {
@@ -2121,9 +2374,9 @@
     const stippleUniform = tables.stippleUniform;
     const edgeTooth = tables.edgeTooth;
 
-    const INK_R = 0;
-    const INK_G = 20;
-    const INK_B = 42;
+    const INK_R = 13;
+    const INK_G = 16;
+    const INK_B = 22;
 
     const targetStippleRate = clamp((stippleDensity === undefined ? 1.0 : stippleDensity) * 0.12, 0.04, 0.28);
     const lumAmplitude = lumSpanOverride === undefined ? 11.0 : lumSpanOverride;
@@ -2191,10 +2444,10 @@
           stippleDotPixels++;
         }
 
-        // Clamp strictly below pure white (#EAEFF6 max, centered on matte #C4C8D2)
-        const cR = clamp(Math.round(outR), 0, 232);
-        const cG = clamp(Math.round(outG), 0, 236);
-        const cB = clamp(Math.round(outB), 0, 244);
+        // Clamp strictly below pure white (#E6E9EF max, centered on archival #C8CBD2)
+        const cR = clamp(Math.round(outR), 0, 230);
+        const cG = clamp(Math.round(outG), 0, 233);
+        const cB = clamp(Math.round(outB), 0, 239);
         data[off4] = cR;
         data[off4 + 1] = cG;
         data[off4 + 2] = cB;
@@ -2289,20 +2542,20 @@
           const r = pPrng();
           const o = i * 4;
           if (r < 0.24) {
-            pData[o] = 0;
-            pData[o + 1] = 20;
-            pData[o + 2] = 42;
-            pData[o + 3] = 56; // 0.22 alpha
+            pData[o] = 13;
+            pData[o + 1] = 16;
+            pData[o + 2] = 22;
+            pData[o + 3] = 58; // #0D1016 Prussian-soot speckle
           } else if (r < 0.45) {
-            pData[o] = 235;
-            pData[o + 1] = 240;
-            pData[o + 2] = 248;
-            pData[o + 3] = 51; // 0.20 alpha
+            pData[o] = 223;
+            pData[o + 1] = 226;
+            pData[o + 2] = 232;
+            pData[o + 3] = 52; // #DFE2E8 silver-bone speckle (zero pure-white)
           } else if (r < 0.56) {
-            pData[o] = 0;
-            pData[o + 1] = 20;
-            pData[o + 2] = 42;
-            pData[o + 3] = 24;
+            pData[o] = 13;
+            pData[o + 1] = 16;
+            pData[o + 2] = 22;
+            pData[o + 3] = 26;
           } else {
             pData[o + 3] = 0;
           }
@@ -2999,7 +3252,7 @@
       sg.closePath();
       sg.fill();
 
-      sg.strokeStyle = "#001830";
+      sg.strokeStyle = SHADOW_INK;
       sg.lineWidth = 1.2;
       sg.stroke();
     }
@@ -3014,22 +3267,22 @@
 
     const terraceBlocks = [
       { wx: -206, wy: 3.2, w: 28, h: 12.5, c: "#B8BCC6", seed: 101 },
-      { wx: -177, wy: 3.4, w: 33, h: 15.0, c: "#C4C8D2", seed: 102 },
-      { wx: -144, wy: 3.2, w: 32, h: 14.2, c: "#BEC3CE", seed: 103 },
-      { wx: -113, wy: 3.4, w: 29, h: 13.0, c: "#C4C8D2", seed: 105 },
+      { wx: -177, wy: 3.4, w: 33, h: 15.0, c: "#C8CBD2", seed: 102 },
+      { wx: -144, wy: 3.2, w: 32, h: 14.2, c: "#BEC2CB", seed: 103 },
+      { wx: -113, wy: 3.4, w: 29, h: 13.0, c: "#C8CBD2", seed: 105 },
       { wx: -87, wy: 3.6, w: 22, h: 9.5, c: "#B8BCC6", seed: 106 },
-      { wx: -188, wy: -9.8, w: 24, h: 10.2, c: "#C6CAD2", seed: 108 },
-      { wx: -158, wy: -10.2, w: 27, h: 11.4, c: "#C0C5CF", seed: 104 },
-      { wx: -128, wy: -8.8, w: 23, h: 9.6, c: "#C6CAD2", seed: 109 },
+      { wx: -188, wy: -9.8, w: 24, h: 10.2, c: "#C8CBD2", seed: 108 },
+      { wx: -158, wy: -10.2, w: 27, h: 11.4, c: "#C1C5CE", seed: 104 },
+      { wx: -128, wy: -8.8, w: 23, h: 9.6, c: "#C8CBD2", seed: 109 },
 
       { wx: 89, wy: 3.6, w: 23, h: 9.8, c: "#B8BCC6", seed: 202 },
-      { wx: 116, wy: 3.4, w: 30, h: 13.6, c: "#C4C8D2", seed: 203 },
-      { wx: 148, wy: 3.2, w: 33, h: 14.8, c: "#BEC3CE", seed: 204 },
-      { wx: 181, wy: 3.4, w: 32, h: 14.0, c: "#C4C8D2", seed: 206 },
+      { wx: 116, wy: 3.4, w: 30, h: 13.6, c: "#C8CBD2", seed: 203 },
+      { wx: 148, wy: 3.2, w: 33, h: 14.8, c: "#BEC2CB", seed: 204 },
+      { wx: 181, wy: 3.4, w: 32, h: 14.0, c: "#C8CBD2", seed: 206 },
       { wx: 210, wy: 3.2, w: 26, h: 11.5, c: "#B8BCC6", seed: 207 },
-      { wx: 132, wy: -9.4, w: 25, h: 10.6, c: "#C6CAD2", seed: 205 },
-      { wx: 164, wy: -10.0, w: 27, h: 11.2, c: "#C0C5CF", seed: 208 },
-      { wx: 194, wy: -8.6, w: 22, h: 9.4, c: "#C6CAD2", seed: 209 }
+      { wx: 132, wy: -9.4, w: 25, h: 10.6, c: "#C8CBD2", seed: 205 },
+      { wx: 164, wy: -10.0, w: 27, h: 11.2, c: "#C1C5CE", seed: 208 },
+      { wx: 194, wy: -8.6, w: 22, h: 9.4, c: "#C8CBD2", seed: 209 }
     ];
     for (const st of terraceBlocks) {
       drawLimestoneBlock(st.wx, st.wy, st.w, st.h, st.c, st.seed);
@@ -3142,62 +3395,292 @@
     });
   }
 
-  function drawPortraitMaskingTapes(g, ox, oy, PW, overColorPrint) {
-    const tapePrng = mulberry32(31632761);
-    function drawMaskingTape(cx, cy, tw, th, rotRad) {
-      g.save();
-      g.translate(cx, cy);
-      g.rotate(rotRad);
-      g.fillStyle = overColorPrint
-        ? "rgba(198, 202, 210, 0.34)"
-        : "rgba(196, 200, 210, 0.26)";
+  // =========================================================================
+  // 45° ROTATED HALFTONE DOT-MATRIX + DECKLED ZINE EDGES + SERRATED TAPE ENGINE
+  // Matches Screenshots AD403DDE & EEC92DFC 100%
+  // =========================================================================
+  function traceDeckledPaperPolygon(g, ox, oy, w, h, amp, seed) {
+    const prng = mulberry32(seed);
+    const stepPx = Math.max(3.5, Math.min(w, h) / 36);
+    const nx = Math.max(16, Math.round(w / stepPx));
+    const ny = Math.max(16, Math.round(h / stepPx));
+    const ph1 = prng() * Math.PI * 2;
+    const ph2 = prng() * Math.PI * 2;
+
+    g.beginPath();
+    // Top edge (left -> right)
+    for (let i = 0; i <= nx; i++) {
+      const u = i / nx;
+      const jit =
+        (Math.sin(u * 29 + ph1) * 0.42 +
+          Math.cos(u * 61 + ph2) * 0.31 +
+          (prng() - 0.5) * 0.58) *
+        amp;
+      const px = ox + u * w;
+      const py = oy + jit;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    // Right edge (top -> bottom)
+    for (let j = 1; j <= ny; j++) {
+      const v = j / ny;
+      const jit =
+        (Math.sin(v * 31 + ph2) * 0.42 +
+          Math.cos(v * 57 + ph1) * 0.31 +
+          (prng() - 0.5) * 0.58) *
+        amp;
+      g.lineTo(ox + w + jit, oy + v * h);
+    }
+    // Bottom edge (right -> left)
+    for (let i = nx - 1; i >= 0; i--) {
+      const u = i / nx;
+      const jit =
+        (Math.sin(u * 27 + ph1 * 1.4) * 0.42 +
+          Math.cos(u * 53 + ph2 * 0.8) * 0.31 +
+          (prng() - 0.5) * 0.58) *
+        amp;
+      g.lineTo(ox + u * w, oy + h + jit);
+    }
+    // Left edge (bottom -> top)
+    for (let j = ny - 1; j >= 1; j--) {
+      const v = j / ny;
+      const jit =
+        (Math.sin(v * 33 + ph2 * 1.3) * 0.42 +
+          Math.cos(v * 59 + ph1 * 0.7) * 0.31 +
+          (prng() - 0.5) * 0.58) *
+        amp;
+      g.lineTo(ox + jit, oy + v * h);
+    }
+    g.closePath();
+  }
+
+  function drawSerratedMaskingTape(g, cx, cy, tw, th, rotRad, seed, rimScale) {
+    const tapePrng = mulberry32(seed);
+    const s = rimScale || 1.0;
+    const teeth = 5;
+    const toothDepth = Math.max(2.6, th * 0.16);
+    const topSegs = 12;
+
+    function buildTapePath() {
       g.beginPath();
-      const segs = 16;
-      for (let i = 0; i <= segs; i++) {
-        const yy = -th * 0.5 + (i / segs) * th;
-        const tear = Math.sin(i * 1.7) * 2.4;
-        if (i === 0) g.moveTo(-tw * 0.5 + tear, yy);
-        else g.lineTo(-tw * 0.5 + tear, yy);
+      // Top long edge (-tw/2 -> +tw/2)
+      for (let i = 0; i <= topSegs; i++) {
+        const u = i / topSegs;
+        const x = -tw * 0.5 + u * tw;
+        const y = -th * 0.5 + Math.sin(u * 13 + seed) * 0.55 * s;
+        if (i === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
       }
-      for (let i = segs; i >= 0; i--) {
-        const yy = -th * 0.5 + (i / segs) * th;
-        const tear = Math.cos(i * 1.9) * 2.4;
-        g.lineTo(tw * 0.5 + tear, yy);
+      // Right serrated zig-zag torn end
+      for (let t = 0; t < teeth; t++) {
+        const yMid = -th * 0.5 + ((t + 0.5) / teeth) * th;
+        const yNext = -th * 0.5 + ((t + 1) / teeth) * th;
+        g.lineTo(tw * 0.5 + toothDepth * (0.72 + tapePrng() * 0.42), yMid);
+        g.lineTo(tw * 0.5 - toothDepth * 0.25, yNext);
+      }
+      // Bottom long edge (+tw/2 -> -tw/2)
+      for (let i = topSegs - 1; i >= 0; i--) {
+        const u = i / topSegs;
+        const x = -tw * 0.5 + u * tw;
+        const y = th * 0.5 + Math.cos(u * 15 + seed * 0.7) * 0.55 * s;
+        g.lineTo(x, y);
+      }
+      // Left serrated zig-zag torn end
+      for (let t = teeth - 1; t >= 0; t--) {
+        const yMid = -th * 0.5 + ((t + 0.5) / teeth) * th;
+        const yPrev = -th * 0.5 + (t / teeth) * th;
+        g.lineTo(-tw * 0.5 - toothDepth * (0.72 + tapePrng() * 0.42), yMid);
+        g.lineTo(-tw * 0.5 + toothDepth * 0.25, yPrev);
       }
       g.closePath();
-      g.fill();
-
-      if (overColorPrint) {
-        g.strokeStyle = "rgba(220, 224, 232, 0.24)";
-        g.lineWidth = 0.8;
-        g.stroke();
-      }
-
-      const dots = Math.floor((tw * th) / 5.2);
-      for (let d = 0; d < dots; d++) {
-        const dx = (tapePrng() - 0.5) * (tw - 4);
-        const dy = (tapePrng() - 0.5) * (th - 3);
-        const a = 0.22 + tapePrng() * 0.42;
-        g.fillStyle = `rgba(220, 224, 232, ${a.toFixed(2)})`;
-        g.fillRect(dx, dy, 1.35, 1.35);
-      }
-      g.restore();
     }
 
-    drawMaskingTape(ox + PW * 0.48, oy - 2, 118, 28, -0.045);
-    drawMaskingTape(ox + PW - 18, oy + 14, 78, 22, 0.68);
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(rotRad);
+
+    // Subtle lift shadow beneath tape
+    g.save();
+    g.shadowColor = "rgba(6, 8, 12, 0.62)";
+    g.shadowBlur = 2.4 * s;
+    g.shadowOffsetY = 1.2 * s;
+    buildTapePath();
+    g.fillStyle = "rgba(154, 159, 169, 0.86)"; // #9EA2AA grainy translucent masking tape
+    g.fill();
+    g.restore();
+
+    // Dense salt-and-pepper risograph speckles clipped inside tape (#707580 / #9EA2AA / #C9CCD3)
+    g.save();
+    buildTapePath();
+    g.clip();
+    const grainDots = Math.floor((tw * th) / (2.3 * s));
+    const grainSz = 1.45 * s;
+    for (let d = 0; d < grainDots; d++) {
+      const dx = (tapePrng() - 0.5) * (tw + toothDepth * 1.8);
+      const dy = (tapePrng() - 0.5) * th;
+      const pick = tapePrng();
+      if (pick < 0.38) {
+        g.fillStyle = "rgba(112, 117, 128, 0.82)"; // #707580 dark fiber speckle
+      } else if (pick < 0.74) {
+        g.fillStyle = "rgba(201, 204, 211, 0.80)"; // #C9CCD3 chalk speckle (zero pure-white)
+      } else {
+        g.fillStyle = "rgba(82, 87, 98, 0.66)"; // deep ink pore
+      }
+      g.fillRect(dx, dy, grainSz, grainSz);
+    }
+    g.restore();
+
+    // Crisp 1.25px (scaled) dark ink outline around serrated perimeter (matching EEC92DFC & AD403DDE)
+    buildTapePath();
+    g.strokeStyle = "rgba(11, 14, 20, 0.94)";
+    g.lineWidth = 1.25 * s;
+    g.lineJoin = "round";
+    g.stroke();
+
+    g.restore();
+  }
+
+  function renderHalftoneZineBuffer(opts) {
+    const {
+      lumSampler,
+      cardW,
+      cardH,
+      padX,
+      padY,
+      pitch,
+      deckleAmp,
+      seed,
+      rimScale,
+      tapes
+    } = opts;
+    const bufW = cardW + padX * 2;
+    const bufH = cardH + padY * 2;
+    const ox = padX;
+    const oy = padY;
+    const out = document.createElement("canvas");
+    out.width = bufW;
+    out.height = bufH;
+    const g = out.getContext("2d");
+    if (!g) return { canvas: out, dotCount: 0 };
+
+    const s = rimScale || 1.0;
+
+    // 1. Dark zine paper sheet (#171A21) with deckled torn perimeter + subtle relief shadow
+    g.save();
+    g.shadowColor = "rgba(5, 7, 11, 0.82)";
+    g.shadowBlur = 5.5 * s;
+    g.shadowOffsetX = 1.2 * s;
+    g.shadowOffsetY = 2.4 * s;
+    traceDeckledPaperPolygon(g, ox, oy, cardW, cardH, deckleAmp, seed);
+    g.fillStyle = "#171A21";
+    g.fill();
+    g.restore();
+
+    // 2. Clip strictly inside the deckled zine paper polygon and render 45°-rotated circular halftone dot-matrix
+    let dotCount = 0;
+    g.save();
+    traceDeckledPaperPolygon(g, ox, oy, cardW, cardH, deckleAmp, seed);
+    g.clip();
+
+    const ang = Math.PI * 0.25; // Exact 45° halftone screen angle
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    const diag = Math.ceil(Math.hypot(cardW, cardH) / pitch) + 2;
+
+    for (let gi = -diag; gi <= diag; gi++) {
+      for (let gj = -diag; gj <= diag; gj++) {
+        const u = gi * pitch;
+        const v = gj * pitch;
+        const px = cardW * 0.5 + u * ca - v * sa;
+        const py = cardH * 0.5 + u * sa + v * ca;
+        if (px < -pitch || px > cardW + pitch || py < -pitch || py > cardH + pitch) {
+          continue;
+        }
+        const nx = clamp(px / cardW, 0, 1);
+        const ny = clamp(py / cardH, 0, 1);
+        const lum = clamp(lumSampler(nx, ny), 0, 1);
+        if (lum < 0.05) continue;
+        // Dot radius proportional to local luminance in #C8CBD2 silver-bone chalk
+        const rad = pitch * 0.54 * Math.pow(lum, 0.56);
+        const minRad = Math.min(0.32 * s, pitch * 0.092);
+        if (rad < minRad) continue;
+        const alpha = clamp(0.85 + 0.13 * lum, 0.83, 0.98);
+        g.fillStyle = `rgba(200, 203, 210, ${alpha.toFixed(3)})`; // #C8CBD2 archival silver-chalk
+        g.beginPath();
+        g.arc(ox + px, oy + py, rad, 0, Math.PI * 2);
+        g.fill();
+        dotCount++;
+      }
+    }
+    g.restore();
+
+    // Subtle dark ink edge along deckled perimeter
+    g.save();
+    traceDeckledPaperPolygon(g, ox, oy, cardW, cardH, deckleAmp, seed);
+    g.strokeStyle = "rgba(8, 10, 14, 0.88)";
+    g.lineWidth = 1.05 * s;
+    g.stroke();
+    g.restore();
+
+    // 3. Serrated grainy masking tape strip(s) outlined in 1.25px dark ink
+    if (Array.isArray(tapes)) {
+      tapes.forEach((tp, tIdx) => {
+        drawSerratedMaskingTape(
+          g,
+          ox + tp.rx * cardW,
+          oy + tp.ry * cardH,
+          tp.tw,
+          tp.th,
+          tp.rot,
+          seed + 701 + tIdx * 97,
+          s
+        );
+      });
+    }
+
+    return { canvas: out, dotCount };
   }
 
   function initMePortraitBuffer() {
-    if (typeof Image === "undefined" || !window.PORTRAIT_SRC_URI) return;
+    if (typeof document === "undefined") return;
     const PW = 440;
     const PH = 544;
-    const PAD_T = 38;
-    const PAD_S = 18;
+    const PAD_T = 40;
+    const PAD_S = 22;
     const BUF_W = PW + PAD_S * 2;
-    const BUF_H = PH + PAD_T + 18;
+    const BUF_H = PH + PAD_T * 2;
     const ox = PAD_S;
     const oy = PAD_T;
+    const portraitTapes = [
+      // Exact EEC92DFC top-center slightly tilted serrated grainy masking tape strip
+      { rx: 0.47, ry: 0.0, tw: 138, th: 34, rot: -0.082 }
+    ];
+
+    // Synchronous atmospheric portrait fallback (ensures immediate non-null buffer in Node VM / pre-decode frames)
+    const fbRes = renderHalftoneZineBuffer({
+      lumSampler(nx, ny) {
+        const dx = nx - 0.5;
+        const dy = ny - 0.44;
+        const headDist = Math.hypot(dx * 1.35, dy * 1.15);
+        const shDist = Math.hypot(dx * 0.92, (ny - 0.88) * 1.35);
+        if (headDist < 0.24) return 0.14;
+        if (headDist < 0.31) return 0.55;
+        if (shDist < 0.42 && ny > 0.62) return 0.78;
+        return clamp(0.82 - Math.hypot(dx, ny - 0.5) * 0.35, 0.25, 0.88);
+      },
+      cardW: PW,
+      cardH: PH,
+      padX: PAD_S,
+      padY: PAD_T,
+      pitch: 8.2, // ~4.2px world-space 45° halftone dot grid at ~228px portrait width!
+      deckleAmp: 4.4, // ±2.2px world-space hand-torn deckled perimeter!
+      seed: 31631984,
+      rimScale: 1.9,
+      tapes: portraitTapes
+    });
+    mePortraitBuffer = fbRes.canvas;
+
+    if (typeof Image === "undefined" || !window.PORTRAIT_SRC_URI) return;
 
     const img = new Image();
     img.onload = function () {
@@ -3207,6 +3690,7 @@
       samp.width = sw;
       samp.height = sh;
       const sctx = samp.getContext("2d");
+      if (!sctx) return;
       sctx.drawImage(img, 0, 0, sw, sh);
       let imgData;
       try {
@@ -3214,47 +3698,28 @@
       } catch (_) {
         return;
       }
+      if (!imgData || imgData.length < sw * sh * 4) return;
 
-      const out = document.createElement("canvas");
-      out.width = BUF_W;
-      out.height = BUF_H;
-      const g = out.getContext("2d");
-      g.fillStyle = "rgba(0, 24, 48, 0.22)";
-      g.fillRect(ox + 2, oy + 2, PW - 4, PH - 4);
-
-      const pitch = 4.65;
-      const ang = Math.PI * 0.25;
-      const ca = Math.cos(ang);
-      const sa = Math.sin(ang);
-      const diag = Math.ceil(Math.hypot(PW, PH) / pitch) + 3;
-      const prng = mulberry32(31631984);
-
-      for (let gi = -diag; gi <= diag; gi++) {
-        for (let gj = -diag; gj <= diag; gj++) {
-          const u = gi * pitch;
-          const v = gj * pitch;
-          const px = PW * 0.5 + u * ca - v * sa;
-          const py = PH * 0.5 + u * sa + v * ca;
-          const jit = (prng() - 0.5) * 3.2;
-          if (px < 2.5 + jit || px >= PW - 2.5 - jit || py < 2.5 + jit || py >= PH - 2.5 - jit) {
-            continue;
-          }
-          const sx = clamp(Math.floor((px / PW) * sw), 0, sw - 1);
-          const sy = clamp(Math.floor((py / PH) * sh), 0, sh - 1);
-          const lum = imgData[(sy * sw + sx) * 4] / 255;
-          if (lum < 0.065) continue;
-          const rad = pitch * 0.56 * Math.sqrt(lum);
-          if (rad < 0.34) continue;
-          const alpha = clamp(0.76 + 0.20 * lum, 0.72, 0.96);
-          g.fillStyle = `rgba(198, 202, 210, ${alpha.toFixed(3)})`;
-          g.beginPath();
-          g.arc(ox + px, oy + py, rad, 0, Math.PI * 2);
-          g.fill();
-        }
-      }
-
-      drawPortraitMaskingTapes(g, ox, oy, PW, false);
-      mePortraitBuffer = out;
+      const built = renderHalftoneZineBuffer({
+        lumSampler(nx, ny) {
+          const sx = clamp(Math.floor(nx * (sw - 1)), 0, sw - 1);
+          const sy = clamp(Math.floor(ny * (sh - 1)), 0, sh - 1);
+          const off = (sy * sw + sx) * 4;
+          const rawLum = (imgData[off] * 0.299 + imgData[off + 1] * 0.587 + imgData[off + 2] * 0.114) / 255;
+          // Crisp zine lithograph S-curve contrast matching EEC92DFC
+          return smoothstep(0.08, 0.93, rawLum);
+        },
+        cardW: PW,
+        cardH: PH,
+        padX: PAD_S,
+        padY: PAD_T,
+        pitch: 8.2,
+        deckleAmp: 4.4,
+        seed: 31631984,
+        rimScale: 1.9,
+        tapes: portraitTapes
+      });
+      mePortraitBuffer = built.canvas;
     };
     img.src = window.PORTRAIT_SRC_URI;
 
@@ -3265,38 +3730,32 @@
       cOut.width = BUF_W;
       cOut.height = BUF_H;
       const cg = cOut.getContext("2d");
-
-      const inset = 2.5;
-      const innerX = ox + inset;
-      const innerY = oy + inset;
-      const innerW = PW - inset * 2;
-      const innerH = PH - inset * 2;
+      if (!cg) return;
 
       cg.save();
-      cg.shadowColor = "rgba(0, 16, 33, 0.38)";
-      cg.shadowBlur = 12;
-      cg.shadowOffsetY = 3;
-      cg.fillStyle = "#DCE0E8";
-      cg.fillRect(ox - 2, oy - 2, PW + 4, PH + 4);
+      cg.shadowColor = "rgba(5, 7, 11, 0.82)";
+      cg.shadowBlur = 10;
+      cg.shadowOffsetY = 4;
+      traceDeckledPaperPolygon(cg, ox, oy, PW, PH, 4.4, 31631984);
+      cg.fillStyle = "#DFE2E8";
+      cg.fill();
       cg.restore();
 
       const photoCanvas = document.createElement("canvas");
-      const pW = Math.round(innerW);
-      const pH = Math.round(innerH);
-      photoCanvas.width = pW;
-      photoCanvas.height = pH;
+      photoCanvas.width = PW;
+      photoCanvas.height = PH;
       const pg = photoCanvas.getContext("2d");
       if ("imageSmoothingEnabled" in pg) {
         pg.imageSmoothingEnabled = true;
         pg.imageSmoothingQuality = "high";
       }
-      pg.fillStyle = "#E4E8EF";
-      pg.fillRect(0, 0, pW, pH);
+      pg.fillStyle = "#DFE2E8";
+      pg.fillRect(0, 0, PW, PH);
 
-      const natW = colorImg.naturalWidth || colorImg.width || pW;
-      const natH = colorImg.naturalHeight || colorImg.height || pH;
+      const natW = colorImg.naturalWidth || colorImg.width || PW;
+      const natH = colorImg.naturalHeight || colorImg.height || PH;
       const srcAspect = natW / Math.max(1, natH);
-      const dstAspect = pW / pH;
+      const dstAspect = PW / PH;
       let sx = 0;
       let sy = 0;
       let sWidth = natW;
@@ -3308,10 +3767,10 @@
         sHeight = natW / dstAspect;
         sy = (natH - sHeight) * 0.35;
       }
-      pg.drawImage(colorImg, sx, sy, sWidth, sHeight, 0, 0, pW, pH);
+      pg.drawImage(colorImg, sx, sy, sWidth, sHeight, 0, 0, PW, PH);
 
       try {
-        const frame = pg.getImageData(0, 0, pW, pH);
+        const frame = pg.getImageData(0, 0, PW, PH);
         const px = frame.data;
         for (let i = 0; i < px.length; i += 4) {
           const r = px[i];
@@ -3324,24 +3783,1140 @@
             if (chroma < 18) {
               const wMix =
                 smoothstep(226, 253, minC) * (1 - smoothstep(5, 18, chroma)) * 0.92;
-              px[i] = Math.round(r + (236 - r) * wMix);
-              px[i + 1] = Math.round(gCh + (239 - gCh) * wMix);
-              px[i + 2] = Math.round(b + (245 - b) * wMix);
+              px[i] = Math.round(r + (228 - r) * wMix);
+              px[i + 1] = Math.round(gCh + (231 - gCh) * wMix);
+              px[i + 2] = Math.round(b + (237 - b) * wMix);
             }
           }
         }
         pg.putImageData(frame, 0, 0);
       } catch (_) {}
 
-      cg.drawImage(photoCanvas, innerX, innerY, innerW, innerH);
-      cg.strokeStyle = "rgba(198, 202, 210, 0.65)";
-      cg.lineWidth = 1.0;
-      cg.strokeRect(innerX + 0.5, innerY + 0.5, innerW - 1, innerH - 1);
-      drawPortraitMaskingTapes(cg, ox, oy, PW, true);
+      cg.save();
+      traceDeckledPaperPolygon(cg, ox, oy, PW, PH, 4.4, 31631984);
+      cg.clip();
+      cg.drawImage(photoCanvas, ox, oy, PW, PH);
+      cg.restore();
+
+      cg.save();
+      traceDeckledPaperPolygon(cg, ox, oy, PW, PH, 4.4, 31631984);
+      cg.strokeStyle = "rgba(11, 14, 20, 0.88)";
+      cg.lineWidth = 1.8;
+      cg.stroke();
+      cg.restore();
+
+      drawSerratedMaskingTape(
+        cg,
+        ox + 0.47 * PW,
+        oy,
+        138,
+        34,
+        -0.082,
+        31631984 + 701,
+        1.9
+      );
 
       mePortraitColorBuffer = cOut;
     };
     colorImg.src = colorSrc;
+  }
+
+  // =========================================================================
+  // 10 DUAL-BUFFER (256x198) 45° HALFTONE + REAL FULL-COLOR ZINE PROJECT CARDS
+  // =========================================================================
+  const DEFAULT_PROJECT_REAL_PHOTOS = {
+    "spanish-super-cup-istanbul": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/T%C3%BCpra%C5%9F_Stadyumu_20231011_2.jpg/640px-T%C3%BCpra%C5%9F_Stadyumu_20231011_2.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/a/a9/T%C3%BCpra%C5%9F_Stadyumu_20231011_2.jpg"
+    ],
+    "riyadh-metro": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/KAFD_metro_station_2025.jpg/640px-KAFD_metro_station_2025.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Riyadh_Metro_-_innoTrans_2016.jpg/640px-Riyadh_Metro_-_innoTrans_2016.jpg"
+    ],
+    "ala-khutah": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Jabele_thor_-_panoramio.jpg/640px-Jabele_thor_-_panoramio.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/1/1a/Jabele_thor_-_panoramio.jpg"
+    ],
+    "riyadh-season": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/The_Boulevard_Riyadh_-_2021.jpg/640px-The_Boulevard_Riyadh_-_2021.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/5/54/The_Boulevard_Riyadh_-_2021.jpg"
+    ],
+    "jeddah-season": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/King_Fahd%E2%80%99s_Fountain.jpg/640px-King_Fahd%E2%80%99s_Fountain.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Jeddah_Waterfront%2C_Western_Saudi_Arabia_%282026%29.jpg/640px-Jeddah_Waterfront%2C_Western_Saudi_Arabia_%282026%29.jpg"
+    ],
+    "qatif-season": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/%D9%88%D8%A7%D8%AC%D9%87%D8%A9-%D9%82%D9%84%D8%B9%D8%A9-%D8%AA%D8%A7%D8%B1%D9%88%D8%AA.jpg/640px-%D9%88%D8%A7%D8%AC%D9%87%D8%A9-%D9%82%D9%84%D8%B9%D8%A9-%D8%AA%D8%A7%D8%B1%D9%88%D8%AA.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/f/f9/%D9%88%D8%A7%D8%AC%D9%87%D8%A9-%D9%82%D9%84%D8%B9%D8%A9-%D8%AA%D8%A7%D8%B1%D9%88%D8%AA.jpg"
+    ],
+    "tourism-visit-jeddah": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Old_Jeddah_%28Al_Balad%29_architecture_3_Feb_2022.jpg/640px-Old_Jeddah_%28Al_Balad%29_architecture_3_Feb_2022.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/d/db/Old_Jeddah_%28Al_Balad%29_architecture_3_Feb_2022.jpg"
+    ],
+    "formula-e-jeddah-2026": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/2023-04-22_Motorsport%2C_ABB_FIA_Formula_E_World_Championship%2C_Berlin_E-Prix_2023_1DX_1080_by_Stepro.jpg/640px-2023-04-22_Motorsport%2C_ABB_FIA_Formula_E_World_Championship%2C_Berlin_E-Prix_2023_1DX_1080_by_Stepro.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/c/c6/2023-04-22_Motorsport%2C_ABB_FIA_Formula_E_World_Championship%2C_Berlin_E-Prix_2023_1DX_1080_by_Stepro.jpg"
+    ],
+    "spanish-super-cup-jeddah-2026": [
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Jawhara_Stadium.jpg/640px-Jawhara_Stadium.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/6/68/Jawhara_Stadium.jpg"
+    ],
+    "school-league-2025-26": [
+      "https://upload.wikimedia.org/wikipedia/en/b/bd/King_Fahd_Int._Stadium-_Opening_Arabian_Gulf_Cup_2014.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Jawhara_Stadium.jpg/640px-Jawhara_Stadium.jpg"
+    ]
+  };
+
+  function normalizeProjectSceneKey(projectId) {
+    const map = {
+      "spanish-super-cup-istanbul": "spanish-super-cup-istanbul",
+      "riyadh-metro": "riyadh-metro",
+      "ala-khutah": "ala-khutah",
+      "riyadh-season": "riyadh-season",
+      "jeddah-season": "jeddah-season",
+      "qatif-season": "qatif-season",
+      "tourism-visit-jeddah": "tourism-visit-jeddah",
+      "pr-formula-e": "formula-e-jeddah-2026",
+      "formula-e-jeddah-2026": "formula-e-jeddah-2026",
+      "pr-super-cup": "spanish-super-cup-jeddah-2026",
+      "spanish-super-cup-jeddah-2026": "spanish-super-cup-jeddah-2026",
+      "pr-school-league": "school-league-2025-26",
+      "school-league-2025-26": "school-league-2025-26"
+    };
+    return map[projectId] || projectId;
+  }
+
+  function resolveProjectPhotoUrls(projectId) {
+    const sceneKey = normalizeProjectSceneKey(projectId);
+    const d = getLocale();
+    if (d && d.branches && d.branches.me && Array.isArray(d.branches.me.items)) {
+      const found = d.branches.me.items.find(
+        (it) => it.id === projectId || normalizeProjectSceneKey(it.id) === sceneKey
+      );
+      if (found && Array.isArray(found.photoUrls) && found.photoUrls.length > 0) {
+        return found.photoUrls.slice();
+      }
+    }
+    const extMap = (typeof window !== "undefined" && window.PROJECT_REAL_PHOTOS) || null;
+    if (extMap) {
+      if (Array.isArray(extMap[projectId]) && extMap[projectId].length > 0) {
+        return extMap[projectId].slice();
+      }
+      if (Array.isArray(extMap[sceneKey]) && extMap[sceneKey].length > 0) {
+        return extMap[sceneKey].slice();
+      }
+    }
+    return (DEFAULT_PROJECT_REAL_PHOTOS[sceneKey] || []).slice();
+  }
+
+  function lerpChannel(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  // Rich full-color offline fallback scenic illustrations (used at 0ms startup before real photos decode)
+  function sampleProjectRichColorScene(sceneKey, nx, ny) {
+    if (sceneKey === "spanish-super-cup-istanbul") {
+      // Floodlit Istanbul night stadium, amber floodlight beams, emerald turf & golden Super Cup
+      let r = lerpChannel(14, 28, ny);
+      let g = lerpChannel(26, 48, ny);
+      let b = lerpChannel(54, 88, ny);
+      const beam1 = Math.max(0, 1 - Math.abs((nx - 0.14) - ny * 0.52) / 0.17) * (1 - ny * 0.22);
+      const beam2 = Math.max(0, 1 - Math.abs((0.86 - nx) - ny * 0.52) / 0.17) * (1 - ny * 0.22);
+      const beam = Math.max(beam1, beam2);
+      r = clamp(r + beam * 228, 0, 255);
+      g = clamp(g + beam * 176, 0, 255);
+      b = clamp(b + beam * 88, 0, 255);
+
+      const bowlY = 0.62 + Math.pow(nx - 0.5, 2) * 0.30;
+      if (ny > 0.83) {
+        const stripe = Math.sin((nx - 0.5) * 44) > 0 ? 1 : 0;
+        r = stripe ? 32 : 22;
+        g = stripe ? 158 : 124;
+        b = stripe ? 82 : 62;
+        if (Math.abs(ny - 0.88) < 0.014) {
+          r = 236; g = 242; b = 246;
+        }
+      } else if (ny > bowlY) {
+        const tierLit = Math.sin((ny - bowlY) * 62) > 0.12;
+        r = tierLit ? 236 : 24;
+        g = tierLit ? 182 : 34;
+        b = tierLit ? 96 : 58;
+      }
+
+      const dx = Math.abs(nx - 0.5);
+      const cupW =
+        ny < 0.24 ? -1 :
+        ny < 0.50 ? 0.14 - (ny - 0.24) * 0.26 :
+        ny < 0.72 ? 0.042 + (ny - 0.50) * 0.06 :
+        ny < 0.88 ? 0.12 : -1;
+      const handle = ny > 0.28 && ny < 0.46 && dx > 0.12 && dx < 0.19 && Math.abs(ny - 0.37) < 0.085;
+      if (cupW > 0 && dx < cupW) {
+        if (dx > cupW - 0.026) {
+          r = 253; g = 216; b = 106;
+        } else {
+          const sheen = clamp(1 - dx / Math.max(0.01, cupW), 0, 1) * 0.28;
+          r = 24 + sheen * 120;
+          g = 28 + sheen * 92;
+          b = 38 + sheen * 40;
+        }
+      } else if (handle) {
+        r = 250; g = 204; b = 86;
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "riyadh-metro") {
+      // Twilight royal-blue & sunset sky, alabaster KAFD geometric arches, sleek blue/white/gold Riyadh Metro
+      const skyT = clamp(ny / 0.68, 0, 1);
+      let r = lerpChannel(26, 232, Math.pow(skyT, 1.35));
+      let g = lerpChannel(76, 172, Math.pow(skyT, 1.15));
+      let b = lerpChannel(152, 118, skyT);
+
+      const arch1 = 0.58 - Math.sin(clamp((nx + 0.05) * 1.5, 0, Math.PI)) * 0.34;
+      const arch2 = 0.62 - Math.sin(clamp((nx - 0.28) * 1.6, 0, Math.PI)) * 0.36;
+      if (ny > Math.min(arch1, arch2) && ny < 0.64) {
+        const diag = Math.abs(Math.sin((nx * 1.4 + ny) * 28)) > 0.86;
+        if (Math.abs(ny - arch1) < 0.034 || Math.abs(ny - arch2) < 0.034) {
+          r = 46; g = 58; b = 82;
+        } else if (ny > arch1) {
+          r = diag ? 186 : 238;
+          g = diag ? 182 : 233;
+          b = diag ? 176 : 224;
+        }
+      }
+
+      const deckY = 0.64 - (1 - nx) * 0.10 + Math.sin(nx * 2.6) * 0.04;
+      if (ny >= deckY && ny <= deckY + 0.09) {
+        r = 28; g = 36; b = 52;
+      } else if (ny > deckY + 0.09) {
+        const pier = Math.abs(((nx * 3.2) % 1) - 0.5) < 0.11;
+        if (pier) {
+          r = 24; g = 31; b = 46;
+        } else {
+          r = lerpChannel(196, 92, (ny - deckY) * 1.8);
+          g = lerpChannel(158, 86, (ny - deckY) * 1.8);
+          b = lerpChannel(124, 98, (ny - deckY) * 1.8);
+        }
+      }
+
+      const noseX = 0.80;
+      if (nx > 0.06 && nx < noseX) {
+        const taper = nx > 0.62 ? Math.pow((nx - 0.62) / 0.18, 1.7) * 0.13 : 0;
+        const trainTop = deckY - 0.18 + taper;
+        if (ny >= trainTop && ny < deckY) {
+          const isWindowBand = ny > trainTop + 0.048 && ny < trainTop + 0.102 && nx < 0.73;
+          const isGoldStripe = Math.abs(ny - (deckY - 0.042)) < 0.018;
+          const isBlueRoof = ny < trainTop + 0.035;
+          const isHeadlight = nx > 0.72 && ny > deckY - 0.07;
+          if (isHeadlight) {
+            r = 255; g = 248; b = 204;
+          } else if (isWindowBand) {
+            r = 254; g = 232; b = 148;
+          } else if (isGoldStripe) {
+            r = 245; g = 188; b = 28;
+          } else if (isBlueRoof) {
+            r = 14; g = 132; b = 206;
+          } else {
+            r = 34; g = 52; b = 84;
+          }
+        }
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "ala-khutah") {
+      // Indigo-violet Hijaz sky, golden desert dusk, terracotta Jabal Thawr & glowing amber Hijrah trail
+      const dusk = Math.pow(clamp(ny / 0.62, 0, 1), 1.3);
+      let r = lerpChannel(22, 212, dusk);
+      let g = lerpChannel(26, 118, dusk);
+      let b = lerpChannel(64, 72, dusk);
+
+      const mDist = Math.hypot((nx - 0.74) * 1.25, ny - 0.24);
+      const mCut = Math.hypot((nx - 0.69) * 1.25, ny - 0.21);
+      if (mDist < 0.14 && mCut > 0.12) {
+        return [255, 240, 188];
+      }
+      if (mDist < 0.34) {
+        const glow = (1 - mDist / 0.34) * 0.65;
+        r = clamp(r + glow * 210, 0, 255);
+        g = clamp(g + glow * 168, 0, 255);
+        b = clamp(b + glow * 92, 0, 255);
+      }
+
+      const ridgeBack =
+        0.48 -
+        Math.exp(-Math.pow((nx - 0.28) / 0.22, 2)) * 0.24 -
+        Math.exp(-Math.pow((nx - 0.72) / 0.26, 2)) * 0.16;
+      const ridgeFront =
+        0.62 - Math.exp(-Math.pow((nx - 0.18) / 0.25, 2)) * 0.18 + Math.sin(nx * 5.2) * 0.04;
+      if (ny > ridgeBack) {
+        r = 96; g = 56; b = 46;
+      }
+      if (ny > ridgeFront) {
+        r = 38; g = 23; b = 20;
+      }
+
+      if (ny >= 0.50) {
+        const t = (ny - 0.50) / 0.50;
+        const trailX = 0.46 + Math.sin(t * 5.2) * (0.14 + t * 0.10);
+        const trailW = 0.022 + t * 0.068;
+        const dTrail = Math.abs(nx - trailX);
+        if (dTrail < trailW) {
+          r = 255; g = 214; b = 112;
+        } else if (dTrail < trailW * 2.2) {
+          const w = 1 - (dTrail - trailW) / (trailW * 1.2);
+          r = lerpChannel(r, 224, w * 0.78);
+          g = lerpChannel(g, 132, w * 0.78);
+          b = lerpChannel(b, 54, w * 0.78);
+        }
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "riyadh-season") {
+      // Neon purple/magenta/gold Boulevard lights & glowing cyan-violet sphere
+      let r = lerpChannel(22, 52, ny);
+      let g = lerpChannel(16, 24, ny);
+      let b = lerpChannel(56, 96, ny);
+
+      const sBeam1 = Math.max(0, 1 - Math.abs((nx - 0.18) - (1 - ny) * 0.36) / 0.11) * 0.75;
+      const sBeam2 = Math.max(0, 1 - Math.abs((0.84 - nx) - (1 - ny) * 0.38) / 0.11) * 0.75;
+      r = clamp(r + sBeam1 * 225 + sBeam2 * 110, 0, 255);
+      g = clamp(g + sBeam1 * 88 + sBeam2 * 175, 0, 255);
+      b = clamp(b + sBeam1 * 165 + sBeam2 * 235, 0, 255);
+
+      const fwD = Math.hypot((nx - 0.24) * 1.25, ny - 0.24);
+      const fwAng = Math.atan2(ny - 0.24, (nx - 0.24) * 1.25);
+      if (fwD < 0.20 && fwD > 0.03 && Math.abs(Math.sin(fwAng * 8)) > 0.80) {
+        r = 254; g = 216; b = 92;
+      }
+
+      const spDx = (nx - 0.56) * 1.26;
+      const spDy = ny - 0.54;
+      const spR = Math.hypot(spDx, spDy);
+      if (spR < 0.27) {
+        const grid = Math.abs(Math.sin(spDy * 28)) > 0.88 || Math.abs(Math.sin(spDx * 26)) > 0.88;
+        if (grid) {
+          r = 32; g = 22; b = 62;
+        } else {
+          const hueMix = clamp((spDx + 0.27) / 0.54, 0, 1);
+          const coreGlow = clamp(1 - spR / 0.27, 0, 1);
+          r = lerpChannel(56, 232, hueMix) + coreGlow * 34;
+          g = lerpChannel(196, 98, hueMix) + coreGlow * 48;
+          b = lerpChannel(252, 246, hueMix);
+        }
+      }
+
+      if (ny > 0.74) {
+        const archOpen = Math.abs(((nx * 5.0) % 1) - 0.5) < 0.24 && ny > 0.80;
+        if (archOpen) {
+          r = 252; g = 202; b = 72;
+        } else {
+          r = 20; g = 16; b = 38;
+        }
+      }
+      return [clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)];
+    }
+
+    if (sceneKey === "jeddah-season") {
+      // Glowing sapphire & warm-gold King Fahd's Fountain over Red Sea night ripples
+      let r = lerpChannel(10, 22, ny);
+      let g = lerpChannel(26, 54, ny);
+      let b = lerpChannel(54, 96, ny);
+
+      const jetDx = Math.abs(nx - 0.48);
+      const plumeW = 0.026 + Math.pow(ny * 0.85, 1.6) * 0.16;
+      if (ny > 0.10 && ny < 0.74) {
+        if (jetDx < plumeW) {
+          const warmBase = clamp((ny - 0.35) / 0.39, 0, 1);
+          r = lerpChannel(228, 255, warmBase);
+          g = lerpChannel(242, 234, warmBase);
+          b = lerpChannel(255, 176, warmBase);
+        } else if (jetDx < plumeW * 2.6) {
+          const mist = clamp(1 - (jetDx - plumeW) / (plumeW * 1.6), 0, 1) * (1 - Math.abs(ny - 0.38));
+          r = clamp(r + mist * 115, 0, 255);
+          g = clamp(g + mist * 175, 0, 255);
+          b = clamp(b + mist * 235, 0, 255);
+        }
+      }
+      const apexD = Math.hypot((nx - 0.48) * 1.2, (ny - 0.14) * 1.8);
+      if (apexD < 0.13) {
+        const a = 1 - apexD / 0.13;
+        r = Math.max(r, 235 * a);
+        g = Math.max(g, 244 * a);
+        b = Math.max(b, 255 * a);
+      }
+
+      if (ny >= 0.70 && ny < 0.76) {
+        if (nx > 0.43 && nx < 0.53) {
+          r = 255; g = 214; b = 112;
+        } else {
+          r = 14; g = 22; b = 36;
+        }
+      } else if (ny >= 0.76) {
+        const reflW = 0.06 + (ny - 0.76) * 0.55;
+        const ripple = Math.sin(ny * 78 + nx * 18) > 0.0;
+        if (jetDx < reflW && ripple) {
+          r = 252; g = 212; b = 108;
+        } else if (ripple && Math.sin(nx * 31) > 0.52) {
+          r = 56; g = 168; b = 228;
+        } else {
+          r = 12; g = 34; b = 64;
+        }
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "qatif-season") {
+      // Sunlit azure sky, warm sandstone/terracotta Tarout Castle, emerald palms & Gulf dhow
+      let r = lerpChannel(42, 168, ny);
+      let g = lerpChannel(116, 218, ny);
+      let b = lerpChannel(232, 250, ny);
+
+      // Lush green palm canopy behind castle
+      const palmD = Math.hypot((nx - 0.56) * 1.3, (ny - 0.52) * 1.4);
+      if (palmD < 0.16 && ny < 0.74) {
+        r = 24; g = 132; b = 64;
+      }
+
+      if (nx < 0.60 && ny > 0.32 && ny < 0.76) {
+        const tower1 = nx > 0.08 && nx < 0.28 && ny > 0.30;
+        const wall = nx >= 0.26 && nx < 0.56 && ny > 0.42;
+        const battlement = ny < 0.46 && Math.sin(nx * 64) > 0.1;
+        if (tower1 || (wall && (!battlement || ny > 0.45))) {
+          const arch1 =
+            Math.hypot((nx - 0.18) * 1.4, ny - 0.60) < 0.075 ||
+            (Math.abs(nx - 0.18) < 0.052 && ny > 0.60);
+          const arch2 =
+            Math.hypot((nx - 0.41) * 1.4, ny - 0.62) < 0.075 ||
+            (Math.abs(nx - 0.41) < 0.052 && ny > 0.62);
+          if (arch1 || arch2) {
+            r = 58; g = 34; b = 22;
+          } else {
+            const shade = nx > 0.25 && nx < 0.29 ? 0.84 : 1.0;
+            r = 216 * shade;
+            g = 154 * shade;
+            b = 102 * shade;
+          }
+        }
+      }
+
+      if (nx > 0.64 && nx < 0.92 && ny > 0.26 && ny < 0.70) {
+        const sailLeft = 0.66 + (0.70 - ny) * 0.36;
+        const sailRight = 0.90 - (ny - 0.26) * 0.08;
+        if (nx >= sailLeft && nx <= sailRight) {
+          r = 250; g = 246; b = 236;
+        }
+      }
+      if (ny >= 0.70 && ny < 0.76 && nx > 0.62 && nx < 0.93) {
+        r = 92; g = 52; b = 28;
+      }
+      if (ny >= 0.76) {
+        const shimmer = Math.sin(ny * 68 + nx * 22) > 0.15;
+        r = shimmer ? 148 : 16;
+        g = shimmer ? 228 : 132;
+        b = shimmer ? 244 : 164;
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "tourism-visit-jeddah") {
+      // Historic Al-Balad coral-stone facades + teal-turquoise & carved teak Rawasheen
+      const laneLeft = 0.34 + ny * 0.06;
+      const laneRight = 0.66 - ny * 0.06;
+      if (nx >= laneLeft && nx <= laneRight) {
+        if (ny > 0.78) {
+          const cobble = Math.sin(ny * 55) > 0;
+          return cobble ? [208, 188, 160] : [96, 78, 62];
+        }
+        return [
+          lerpChannel(48, 148, ny),
+          lerpChannel(142, 204, ny),
+          lerpChannel(234, 252, ny)
+        ];
+      }
+
+      let r = 234, g = 218, b = 194;
+      const inLeftRoshan =
+        nx > 0.06 && nx < laneLeft - 0.02 && ((ny > 0.14 && ny < 0.44) || (ny > 0.50 && ny < 0.78));
+      const inRightRoshan =
+        nx > laneRight + 0.02 && nx < 0.94 && ((ny > 0.18 && ny < 0.48) || (ny > 0.54 && ny < 0.82));
+      if (inLeftRoshan || inRightRoshan) {
+        const lattice = Math.abs(Math.sin(nx * 74)) > 0.76 && Math.abs(Math.sin(ny * 64)) > 0.76;
+        const isTeal = inLeftRoshan ? ny < 0.46 : ny > 0.50;
+        if (lattice) {
+          r = 248; g = 216; b = 142;
+        } else if (isTeal) {
+          r = 18; g = 132; b = 124;
+        } else {
+          r = 98; g = 56; b = 32;
+        }
+      } else if (Math.abs(Math.sin(ny * 26)) > 0.90) {
+        r = 116; g = 72; b = 44;
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "formula-e-jeddah-2026") {
+      // Electric blue/crimson Formula E Gen3 car streaking past floodlit Jeddah Corniche kerbs
+      let r = 14, g = 24, b = 48;
+      const streak = Math.sin((nx * 0.85 + ny * 1.4) * 22);
+      if (ny < 0.38) {
+        if (streak > 0.55) {
+          r = 56; g = 198; b = 248;
+        }
+      } else {
+        const asph = 1 - (ny - 0.38) * 0.45;
+        r = 58 * asph;
+        g = 68 * asph;
+        b = 86 * asph;
+      }
+
+      const kerbTop = 0.44 - nx * 0.18;
+      if (Math.abs(ny - kerbTop) < 0.055) {
+        const redStripe = Math.sin(nx * 46) > 0;
+        r = redStripe ? 236 : 242;
+        g = redStripe ? 52 : 246;
+        b = redStripe ? 68 : 252;
+      }
+      const kerbBot = 0.94 - nx * 0.16;
+      if (ny > kerbBot) {
+        const blueStripe = Math.sin(nx * 42) > 0;
+        r = blueStripe ? 14 : 242;
+        g = blueStripe ? 165 : 246;
+        b = blueStripe ? 233 : 252;
+      }
+
+      const cx = nx - 0.48;
+      const cy = ny - 0.60 + cx * 0.14;
+      const body = Math.abs(cx) < 0.28 && cy > -0.055 && cy < 0.055;
+      const haloCockpit = Math.abs(cx + 0.02) < 0.10 && cy > -0.11 && cy <= -0.04;
+      const wheelL = Math.hypot((cx + 0.20) * 1.25, cy - 0.02) < 0.085;
+      const wheelR = Math.hypot((cx - 0.21) * 1.25, cy - 0.02) < 0.085;
+      const rearWing = cx < -0.23 && cx > -0.32 && cy > -0.13 && cy < 0.03;
+      if (wheelL || wheelR) {
+        const rim =
+          Math.abs(Math.hypot((cx + 0.20) * 1.25, cy - 0.02) - 0.045) < 0.016 ||
+          Math.abs(Math.hypot((cx - 0.21) * 1.25, cy - 0.02) - 0.045) < 0.016;
+        r = rim ? 56 : 20;
+        g = rim ? 216 : 24;
+        b = rim ? 248 : 32;
+      } else if (body || haloCockpit || rearWing) {
+        const aeroStripe = body && Math.abs(cy + 0.01) < 0.016;
+        if (aeroStripe) {
+          r = 244; g = 63; b = 94;
+        } else if (haloCockpit) {
+          r = 34; g = 211; b = 238;
+        } else {
+          r = 28; g = 92; b = 228;
+        }
+      }
+      return [r, g, b];
+    }
+
+    if (sceneKey === "spanish-super-cup-jeddah-2026") {
+      // Illuminated golden-amber geometric mashrabiya dome of Al-Jawhara Stadium in Jeddah
+      let r = lerpChannel(12, 26, ny);
+      let g = lerpChannel(24, 52, ny);
+      let b = lerpChannel(48, 88, ny);
+
+      const b1 = Math.max(0, 1 - Math.abs((nx - 0.26) + (ny - 0.45) * 0.35) / 0.12) * (1 - ny);
+      const b2 = Math.max(0, 1 - Math.abs((nx - 0.74) - (ny - 0.45) * 0.35) / 0.12) * (1 - ny);
+      const bm = Math.max(b1, b2);
+      r = clamp(r + bm * 220, 0, 255);
+      g = clamp(g + bm * 185, 0, 255);
+      b = clamp(b + bm * 115, 0, 255);
+
+      const domeTop = 0.42 + Math.pow((nx - 0.5) * 1.45, 2) * 0.46;
+      if (ny >= domeTop && ny <= 0.78 && Math.abs(nx - 0.5) < 0.44) {
+        const diag1 = Math.abs(Math.sin((nx * 1.3 + ny) * 34));
+        const diag2 = Math.abs(Math.sin((nx * 1.3 - ny) * 34));
+        const rib = diag1 > 0.84 || diag2 > 0.84;
+        if (rib) {
+          r = 26; g = 34; b = 52;
+        } else {
+          const glow = 1 - Math.abs(nx - 0.5) * 0.7;
+          r = 248 * glow;
+          g = 186 * glow;
+          b = 82 * glow;
+        }
+      } else if (ny > 0.78) {
+        const lit = Math.abs(nx - 0.5) < 0.38 && Math.sin(nx * 36) > -0.2;
+        r = lit ? 34 : 16;
+        g = lit ? 168 : 26;
+        b = lit ? 92 : 42;
+      }
+      return [clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)];
+    }
+
+    // 10. school-league-2025-26: Floodlit emerald stadium turf, chalk touchlines & match football
+    let r = 16, g = 34, b = 66;
+    const fl1 = Math.hypot((nx - 0.18) * 1.25, ny - 0.18);
+    const fl2 = Math.hypot((nx - 0.82) * 1.25, ny - 0.18);
+    if (fl1 < 0.07 || fl2 < 0.07) return [255, 250, 224];
+    const halo = Math.max(
+      fl1 < 0.28 ? (1 - fl1 / 0.28) * 0.78 : 0,
+      fl2 < 0.28 ? (1 - fl2 / 0.28) * 0.78 : 0
+    );
+    r = clamp(r + halo * 225, 0, 255);
+    g = clamp(g + halo * 205, 0, 255);
+    b = clamp(b + halo * 145, 0, 255);
+    if ((Math.abs(nx - 0.18) < 0.016 || Math.abs(nx - 0.82) < 0.016) && ny > 0.18 && ny < 0.48) {
+      r = 196; g = 206; b = 224;
+    }
+
+    if (ny >= 0.48) {
+      const mowStripe = Math.sin((ny - 0.48) * 38) > 0;
+      const line1 = Math.abs((nx - 0.5) - (ny - 0.42) * 0.85) < 0.022;
+      const line2 = Math.abs((nx - 0.5) + (ny - 0.42) * 0.85) < 0.022;
+      const midLine = Math.abs(ny - 0.60) < 0.018;
+      if (line1 || line2 || midLine) {
+        r = 244; g = 248; b = 252;
+      } else if (mowStripe) {
+        r = 34; g = 166; b = 78;
+      } else {
+        r = 21; g = 126; b = 58;
+      }
+    }
+
+    const ballDx = (nx - 0.50) * 1.26;
+    const ballDy = ny - 0.72;
+    const ballR = Math.hypot(ballDx, ballDy);
+    if (ballR < 0.175) {
+      const centerPent = Math.hypot(ballDx, ballDy + 0.01) < 0.062;
+      const sidePent1 = Math.hypot(ballDx - 0.12, ballDy - 0.04) < 0.048;
+      const sidePent2 = Math.hypot(ballDx + 0.12, ballDy - 0.04) < 0.048;
+      const topPent = Math.hypot(ballDx, ballDy + 0.13) < 0.044;
+      if (centerPent || sidePent1 || sidePent2 || topPent) {
+        r = 20; g = 26; b = 36;
+      } else {
+        const shade = clamp(1.04 - ballR * 1.2, 0.76, 1.0);
+        r = 248 * shade;
+        g = 250 * shade;
+        b = 252 * shade;
+      }
+    }
+    return [r, g, b];
+  }
+
+  function sampleProjectTonalScene(sceneKey, nx, ny) {
+    const rgb = sampleProjectRichColorScene(sceneKey, nx, ny);
+    const rawL = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+    return smoothstep(0.05, 0.94, rawL);
+  }
+
+  function createRichFallbackSourceCanvas(sceneKey, w, h) {
+    const src = document.createElement("canvas");
+    src.width = w;
+    src.height = h;
+    const sctx = src.getContext("2d");
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      const ny = y / Math.max(1, h - 1);
+      for (let x = 0; x < w; x++) {
+        const nx = x / Math.max(1, w - 1);
+        const rgb = sampleProjectRichColorScene(sceneKey, nx, ny);
+        const off = (y * w + x) * 4;
+        rgba[off] = clamp(Math.round(rgb[0]), 0, 255);
+        rgba[off + 1] = clamp(Math.round(rgb[1]), 0, 255);
+        rgba[off + 2] = clamp(Math.round(rgb[2]), 0, 255);
+        rgba[off + 3] = 255;
+      }
+    }
+    src.__rgbaData = rgba;
+    if (sctx && typeof sctx.createImageData === "function" && typeof sctx.putImageData === "function") {
+      try {
+        const imgData = sctx.createImageData(w, h);
+        imgData.data.set(rgba);
+        sctx.putImageData(imgData, 0, 0);
+      } catch (_) {}
+    }
+    return { canvas: src, rgba };
+  }
+
+  function computeAdaptiveLuminanceSampler(rgba, w, h) {
+    const hist = new Uint32Array(256);
+    const total = w * h;
+    for (let i = 0; i < total; i++) {
+      const off = i * 4;
+      const l = Math.round(0.299 * rgba[off] + 0.587 * rgba[off + 1] + 0.114 * rgba[off + 2]);
+      hist[clamp(l, 0, 255)]++;
+    }
+    let acc = 0;
+    let p05 = 12;
+    let p96 = 242;
+    const t05 = total * 0.05;
+    const t96 = total * 0.96;
+    let found05 = false;
+    for (let b = 0; b < 256; b++) {
+      acc += hist[b];
+      if (!found05 && acc >= t05) {
+        p05 = b;
+        found05 = true;
+      }
+      if (acc >= t96) {
+        p96 = b;
+        break;
+      }
+    }
+    const lo = clamp((p05 / 255) * 0.58, 0.02, 0.16);
+    const hi = clamp(Math.max(lo + 0.36, (p96 / 255) * 0.68 + 0.30), 0.60, 0.96);
+
+    return function (nx, ny) {
+      const fx = clamp(nx, 0, 1) * (w - 1);
+      const fy = clamp(ny, 0, 1) * (h - 1);
+      const x0 = Math.floor(fx);
+      const y0 = Math.floor(fy);
+      const x1 = Math.min(w - 1, x0 + 1);
+      const y1 = Math.min(h - 1, y0 + 1);
+      const tx = fx - x0;
+      const ty = fy - y0;
+
+      const o00 = (y0 * w + x0) * 4;
+      const o10 = (y0 * w + x1) * 4;
+      const o01 = (y1 * w + x0) * 4;
+      const o11 = (y1 * w + x1) * 4;
+
+      const l00 = (0.299 * rgba[o00] + 0.587 * rgba[o00 + 1] + 0.114 * rgba[o00 + 2]) / 255;
+      const l10 = (0.299 * rgba[o10] + 0.587 * rgba[o10 + 1] + 0.114 * rgba[o10 + 2]) / 255;
+      const l01 = (0.299 * rgba[o01] + 0.587 * rgba[o01 + 1] + 0.114 * rgba[o01 + 2]) / 255;
+      const l11 = (0.299 * rgba[o11] + 0.587 * rgba[o11 + 1] + 0.114 * rgba[o11 + 2]) / 255;
+
+      const rawLum =
+        (l00 * (1 - tx) + l10 * tx) * (1 - ty) +
+        (l01 * (1 - tx) + l11 * tx) * ty;
+      const norm = clamp((rawLum - lo) / Math.max(0.05, hi - lo), 0, 1);
+      // Gentle lithograph S-curve contrast boost so architectural/stadium/fountain details pop
+      return smoothstep(0.03, 0.97, norm) * 0.86 + norm * 0.14;
+    };
+  }
+
+  function renderColorZineBuffer(opts) {
+    const {
+      photoSource,
+      sourceRgba,
+      cardW,
+      cardH,
+      padX,
+      padY,
+      deckleAmp,
+      seed,
+      rimScale,
+      tapes
+    } = opts;
+    const bufW = cardW + padX * 2;
+    const bufH = cardH + padY * 2;
+    const ox = padX;
+    const oy = padY;
+    const out = document.createElement("canvas");
+    out.width = bufW;
+    out.height = bufH;
+    const cg = out.getContext("2d");
+    if (!cg) return { canvas: out, colorSampleRgb: [0, 0, 0] };
+
+    const s = rimScale || 1.0;
+
+    // 1. Identical deckle-edged zine paper (#171A21) + relief shadow
+    cg.save();
+    cg.shadowColor = "rgba(5, 7, 11, 0.82)";
+    cg.shadowBlur = 5.5 * s;
+    cg.shadowOffsetX = 1.2 * s;
+    cg.shadowOffsetY = 2.4 * s;
+    traceDeckledPaperPolygon(cg, ox, oy, cardW, cardH, deckleAmp, seed);
+    cg.fillStyle = "#171A21";
+    cg.fill();
+    cg.restore();
+
+    // 2. Prepare center-cropped full-color photo with subtle warm film vibrance (saturate 1.08, contrast 1.05)
+    const photoCanvas = document.createElement("canvas");
+    photoCanvas.width = cardW;
+    photoCanvas.height = cardH;
+    const pg = photoCanvas.getContext("2d");
+    let colorSampleRgb = [0, 0, 0];
+
+    if (pg) {
+      if ("imageSmoothingEnabled" in pg) {
+        pg.imageSmoothingEnabled = true;
+        pg.imageSmoothingQuality = "high";
+      }
+      if (photoSource) {
+        const natW = photoSource.naturalWidth || photoSource.videoWidth || photoSource.width || cardW;
+        const natH = photoSource.naturalHeight || photoSource.videoHeight || photoSource.height || cardH;
+        const srcAspect = natW / Math.max(1, natH);
+        const dstAspect = cardW / cardH;
+        let sx = 0;
+        let sy = 0;
+        let sWidth = natW;
+        let sHeight = natH;
+        if (srcAspect > dstAspect * 1.005) {
+          sWidth = natH * dstAspect;
+          sx = (natW - sWidth) * 0.5;
+        } else if (srcAspect < dstAspect * 0.995) {
+          sHeight = natW / dstAspect;
+          sy = (natH - sHeight) * 0.45;
+        }
+        pg.drawImage(photoSource, sx, sy, sWidth, sHeight, 0, 0, cardW, cardH);
+      }
+
+      try {
+        let frame = null;
+        let px = null;
+        if (sourceRgba && sourceRgba.length === cardW * cardH * 4) {
+          frame = pg.createImageData(cardW, cardH);
+          frame.data.set(sourceRgba);
+          px = frame.data;
+        } else if (typeof pg.getImageData === "function") {
+          frame = pg.getImageData(0, 0, cardW, cardH);
+          px = frame && frame.data;
+        }
+        if (px && px.length >= cardW * cardH * 4) {
+          let sumR = 0;
+          let sumG = 0;
+          let sumB = 0;
+          const nPx = cardW * cardH;
+          for (let i = 0; i < px.length; i += 4) {
+            const r = px[i];
+            const gCh = px[i + 1];
+            const b = px[i + 2];
+            const luma = 0.299 * r + 0.587 * gCh + 0.114 * b;
+            // Subtle warm film vibrance boost: saturate(1.08) + contrast(1.05) + warm archival tint
+            const nr = clamp(Math.round(((luma + (r - luma) * 1.08) - 128) * 1.05 + 129.5), 0, 255);
+            const ng = clamp(Math.round(((luma + (gCh - luma) * 1.08) - 128) * 1.05 + 128.4), 0, 255);
+            const nb = clamp(Math.round(((luma + (b - luma) * 1.08) - 128) * 1.05 + 127.2), 0, 255);
+            px[i] = nr;
+            px[i + 1] = ng;
+            px[i + 2] = nb;
+            if (px[i + 3] === 0) px[i + 3] = 255;
+            sumR += nr;
+            sumG += ng;
+            sumB += nb;
+          }
+          colorSampleRgb = [
+            Math.round(sumR / nPx),
+            Math.round(sumG / nPx),
+            Math.round(sumB / nPx)
+          ];
+          photoCanvas.__rgbaData = new Uint8ClampedArray(px);
+          pg.putImageData(frame, 0, 0);
+        }
+      } catch (_) {}
+    }
+
+    // Clip strictly to the EXACT SAME jagged deckled paper polygon as halftoneCanvas!
+    cg.save();
+    traceDeckledPaperPolygon(cg, ox, oy, cardW, cardH, deckleAmp, seed);
+    cg.clip();
+    cg.drawImage(photoCanvas, ox, oy, cardW, cardH);
+    cg.restore();
+
+    // 3. Exact same dark ink edge along deckled perimeter
+    cg.save();
+    traceDeckledPaperPolygon(cg, ox, oy, cardW, cardH, deckleAmp, seed);
+    cg.strokeStyle = "rgba(8, 10, 14, 0.88)";
+    cg.lineWidth = 1.05 * s;
+    cg.stroke();
+    cg.restore();
+
+    // 4. Exact same serrated grainy masking tape strip(s) on top (100% locked during cross-fade!)
+    if (Array.isArray(tapes)) {
+      tapes.forEach((tp, tIdx) => {
+        drawSerratedMaskingTape(
+          cg,
+          ox + tp.rx * cardW,
+          oy + tp.ry * cardH,
+          tp.tw,
+          tp.th,
+          tp.rot,
+          seed + 701 + tIdx * 97,
+          s
+        );
+      });
+    }
+
+    out.__colorSampleRgb = colorSampleRgb;
+    return { canvas: out, colorSampleRgb };
+  }
+
+  function getProjectCardGeometryAndTapes(cardSeed) {
+    // Exact 256 x 198 high-resolution offscreen buffer (cardW=212 + 2*22 = 256, cardH=164 + 2*17 = 198)
+    const cardW = 212;
+    const cardH = 164;
+    const padX = 22;
+    const padY = 17;
+    const pitch = 3.2; // Crisp 3.2px 45°-rotated circular halftone dot screen
+    const deckleAmp = 4.2;
+    const rimScale = 1.48;
+
+    const tapeVariant = Math.abs(cardSeed) % 4;
+    let tapes;
+    if (tapeVariant === 0) {
+      tapes = [{ rx: 0.48, ry: 0.0, tw: 70, th: 19, rot: -0.075 }];
+    } else if (tapeVariant === 1) {
+      tapes = [
+        { rx: 0.06, ry: 0.05, tw: 60, th: 17, rot: -0.68 },
+        { rx: 0.93, ry: 0.06, tw: 60, th: 17, rot: 0.72 }
+      ];
+    } else if (tapeVariant === 2) {
+      tapes = [{ rx: 0.07, ry: 0.05, tw: 64, th: 18, rot: -0.70 }];
+    } else {
+      tapes = [{ rx: 0.52, ry: 0.0, tw: 72, th: 19, rot: 0.065 }];
+    }
+    return { cardW, cardH, padX, padY, pitch, deckleAmp, rimScale, tapes };
+  }
+
+  function buildProjectHalftoneCard(projectId, seed) {
+    const sceneKey = normalizeProjectSceneKey(projectId);
+    const cardSeed = seed || 4030001;
+    const geom = getProjectCardGeometryAndTapes(cardSeed);
+    const { cardW, cardH, padX, padY, pitch, deckleAmp, rimScale, tapes } = geom;
+
+    // 1. Synchronous rich full-color fallback illustration at 0ms
+    const fbSrc = createRichFallbackSourceCanvas(sceneKey, cardW, cardH);
+    const lumSampler = computeAdaptiveLuminanceSampler(fbSrc.rgba, cardW, cardH);
+
+    const halftoneRes = renderHalftoneZineBuffer({
+      lumSampler,
+      cardW,
+      cardH,
+      padX,
+      padY,
+      pitch,
+      deckleAmp,
+      seed: cardSeed,
+      rimScale,
+      tapes
+    });
+
+    const colorRes = renderColorZineBuffer({
+      photoSource: fbSrc.canvas,
+      sourceRgba: fbSrc.rgba,
+      cardW,
+      cardH,
+      padX,
+      padY,
+      deckleAmp,
+      seed: cardSeed,
+      rimScale,
+      tapes
+    });
+
+    const prng = mulberry32(cardSeed ^ 0x5a17);
+    const sign = cardSeed % 2 === 0 ? -1 : 1;
+    const tiltRad = sign * (0.032 + prng() * 0.028);
+    const photoUrls = resolveProjectPhotoUrls(projectId);
+
+    return {
+      projectId,
+      sceneKey,
+      seed: cardSeed,
+      tapes,
+      photoUrls,
+      halftoneCanvas: halftoneRes.canvas,
+      colorCanvas: colorRes.canvas,
+      canvas: halftoneRes.canvas,
+      bufW: halftoneRes.canvas.width,
+      bufH: halftoneRes.canvas.height,
+      cardW,
+      cardH,
+      padX,
+      padY,
+      pitch,
+      dotCount: halftoneRes.dotCount,
+      colorSampleRgb: colorRes.colorSampleRgb,
+      tiltRad,
+      tapeCount: tapes.length,
+      isRealPhoto: false,
+      loadedUrl: null,
+      rebuildCount: 1
+    };
+  }
+
+  function upgradeProjectCardFromLoadedImage(card, img, loadedUrl, hadCors) {
+    if (!card || !img) return false;
+    const geom = getProjectCardGeometryAndTapes(card.seed);
+    const { cardW, cardH, padX, padY, pitch, deckleAmp, rimScale, tapes } = geom;
+
+    // Draw cover-cropped real photograph into cardW x cardH source canvas
+    const srcCanvas = document.createElement("canvas");
+    srcCanvas.width = cardW;
+    srcCanvas.height = cardH;
+    const sctx = srcCanvas.getContext("2d");
+    const natW = img.naturalWidth || img.width || cardW;
+    const natH = img.naturalHeight || img.height || cardH;
+    const srcAspect = natW / Math.max(1, natH);
+    const dstAspect = cardW / cardH;
+    let sx = 0;
+    let sy = 0;
+    let sWidth = natW;
+    let sHeight = natH;
+    if (srcAspect > dstAspect * 1.005) {
+      sWidth = natH * dstAspect;
+      sx = (natW - sWidth) * 0.5;
+    } else if (srcAspect < dstAspect * 0.995) {
+      sHeight = natW / dstAspect;
+      sy = (natH - sHeight) * 0.45;
+    }
+
+    let extractedRgba = null;
+    if (sctx) {
+      if ("imageSmoothingEnabled" in sctx) {
+        sctx.imageSmoothingEnabled = true;
+        sctx.imageSmoothingQuality = "high";
+      }
+      sctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, cardW, cardH);
+      if (hadCors !== false) {
+        try {
+          const frame = sctx.getImageData(0, 0, cardW, cardH);
+          if (frame && frame.data && frame.data.length === cardW * cardH * 4) {
+            // Check that buffer actually contains non-zero alpha pixels (or mock img.__rgbaData)
+            let anyNonZero = false;
+            for (let i = 0; i < frame.data.length; i += 16) {
+              if (frame.data[i] || frame.data[i + 1] || frame.data[i + 2] || frame.data[i + 3]) {
+                anyNonZero = true;
+                break;
+              }
+            }
+            if (anyNonZero) {
+              extractedRgba = new Uint8ClampedArray(frame.data);
+            }
+          }
+        } catch (_) {
+          extractedRgba = null;
+        }
+      }
+    }
+
+    if (!extractedRgba && img.__rgbaData && img.__rgbaData.length === cardW * cardH * 4) {
+      extractedRgba = new Uint8ClampedArray(img.__rgbaData);
+    }
+
+    // Regenerate halftoneCanvas whenever pixel luminance is readable via CORS
+    if (extractedRgba) {
+      const lumSampler = computeAdaptiveLuminanceSampler(extractedRgba, cardW, cardH);
+      const halftoneRes = renderHalftoneZineBuffer({
+        lumSampler,
+        cardW,
+        cardH,
+        padX,
+        padY,
+        pitch,
+        deckleAmp,
+        seed: card.seed,
+        rimScale,
+        tapes
+      });
+      card.halftoneCanvas = halftoneRes.canvas;
+      card.canvas = halftoneRes.canvas;
+      card.dotCount = halftoneRes.dotCount;
+    }
+
+    // Always regenerate colorCanvas (works both with CORS pixel vibrance AND non-CORS drawImage fallback!)
+    const colorRes = renderColorZineBuffer({
+      photoSource: img,
+      sourceRgba: extractedRgba,
+      cardW,
+      cardH,
+      padX,
+      padY,
+      deckleAmp,
+      seed: card.seed,
+      rimScale,
+      tapes
+    });
+    card.colorCanvas = colorRes.canvas;
+    card.colorSampleRgb = colorRes.colorSampleRgb;
+    card.bufW = card.halftoneCanvas.width;
+    card.bufH = card.halftoneCanvas.height;
+    card.isRealPhoto = true;
+    card.loadedUrl = loadedUrl || null;
+    card.hadCorsPixels = Boolean(extractedRgba);
+    card.rebuildCount = (card.rebuildCount || 1) + 1;
+    return true;
+  }
+
+  const PROJECT_CARD_SPECS = [
+    { id: "spanish-super-cup-istanbul", seed: 5101 },
+    { id: "riyadh-metro", seed: 5102 },
+    { id: "ala-khutah", seed: 5103 },
+    { id: "riyadh-season", seed: 5104 },
+    { id: "jeddah-season", seed: 5105 },
+    { id: "qatif-season", seed: 5106 },
+    { id: "tourism-visit-jeddah", seed: 5107 },
+    { id: "pr-formula-e", seed: 5108 },
+    { id: "pr-super-cup", seed: 5109 },
+    { id: "pr-school-league", seed: 5110 }
+  ];
+
+  function initProjectHalftoneCards() {
+    PROJECT_CARD_SPECS.forEach((sp) => {
+      const card = buildProjectHalftoneCard(sp.id, sp.seed);
+      projectPhotoCards[sp.id] = card;
+      projectPhotoCards[card.sceneKey] = card;
+      if (projectPhotoHover[sp.id] === undefined) projectPhotoHover[sp.id] = 0;
+    });
+  }
+
+  function loadRealProjectPhotos() {
+    const ImgCtor =
+      (typeof window !== "undefined" && window.Image) ||
+      (typeof Image !== "undefined" ? Image : null);
+    if (!ImgCtor) return;
+
+    PROJECT_CARD_SPECS.forEach((sp) => {
+      const card = projectPhotoCards[sp.id];
+      if (!card) return;
+      const urls = resolveProjectPhotoUrls(sp.id);
+      card.photoUrls = urls.slice();
+      if (!urls.length) return;
+
+      const state = {
+        id: sp.id,
+        sceneKey: card.sceneKey,
+        urls: urls.slice(),
+        attemptIdx: 0,
+        useCors: true,
+        crossOrigin: "anonymous",
+        status: "loading",
+        loadedUrl: null,
+        activeImage: null
+      };
+      projectPhotoLoadState[sp.id] = state;
+      projectPhotoLoadState[card.sceneKey] = state;
+
+      function tryLoad(urlIdx, withCors) {
+        if (urlIdx >= urls.length) {
+          if (withCors) {
+            // If all CORS attempts failed, retry without crossOrigin so colorCanvas can still drawImage!
+            tryLoad(0, false);
+          } else {
+            state.status = "fallback";
+          }
+          return;
+        }
+        const targetUrl = urls[urlIdx];
+        state.attemptIdx = urlIdx;
+        state.useCors = withCors;
+        state.crossOrigin = withCors ? "anonymous" : null;
+
+        const img = new ImgCtor();
+        if (withCors) {
+          img.crossOrigin = "anonymous";
+        }
+        state.activeImage = img;
+
+        img.onload = function () {
+          upgradeProjectCardFromLoadedImage(card, img, targetUrl, withCors);
+          state.status = "loaded";
+          state.loadedUrl = targetUrl;
+        };
+        img.onerror = function () {
+          tryLoad(urlIdx + 1, withCors);
+        };
+        img.src = targetUrl;
+      }
+
+      tryLoad(0, true);
+    });
   }
 
   function buildWorldProps() {
@@ -3568,7 +5143,7 @@
       });
     }
 
-    // Meandering dotted silver trails (`• • • • •`) through the #00152b underground soil (matching 9AA84C5A!)
+    // Meandering dotted silver trails (`• • • • •`) through the #13161C underground soil (matching 9AA84C5A!)
     const trailCurves = [
       { p0: [-375, 118], p1: [-332, 134], p2: [-295, 140], p3: [-254, 126], count: 11 },
       { p0: [-208, 152], p1: [-176, 132], p2: [-144, 128], p3: [-108, 144], count: 10 },
@@ -3703,8 +5278,8 @@
     const safeSkyH = clampedSkyBottom - y;
     if (safeSkyH > 2) {
       const grad = ctx.createRadialGradient(cxWorld, cyWorld, 10, cxWorld, cyWorld, radius);
-      grad.addColorStop(0, "rgba(0, 31, 63, 0.86)");
-      grad.addColorStop(1, "rgba(0, 31, 63, 0)");
+      grad.addColorStop(0, "rgba(28, 31, 38, 0.84)");
+      grad.addColorStop(1, "rgba(28, 31, 38, 0)");
       ctx.fillStyle = grad;
       ctx.fillRect(x, y, w, safeSkyH);
     }
@@ -3713,8 +5288,8 @@
     const safeSoilH = y + h - clampedSoilTop;
     if (safeSoilH > 2) {
       const sGrad = ctx.createRadialGradient(cxWorld, cyWorld, 10, cxWorld, cyWorld, radius);
-      sGrad.addColorStop(0, "rgba(0, 21, 43, 0.90)");
-      sGrad.addColorStop(1, "rgba(0, 21, 43, 0)");
+      sGrad.addColorStop(0, "rgba(19, 22, 28, 0.90)");
+      sGrad.addColorStop(1, "rgba(19, 22, 28, 0)");
       ctx.fillStyle = sGrad;
       ctx.fillRect(x, clampedSoilTop, w, safeSoilH);
     }
@@ -3725,10 +5300,18 @@
   // =========================================================================
   function renderMeEditorialAndPortrait(bCfg, lay, tipX, tipY, canopySway) {
     const rtl = isRTL();
-    const limbRaw = branchLimbGrow.me;
-    const limbProg = easeOutCubic(limbRaw);
+    const limbProg = branchLimbGrow.me;
+    const limbRaw = limbProg;
     const bioProg = meBioType;
-    if (limbRaw <= 0.005 && bioProg <= 0.005) return;
+    let maxProjVis = meProjectsHeadingType;
+    if (bCfg && Array.isArray(bCfg.items)) {
+      for (let i = 0; i < bCfg.items.length; i++) {
+        const pid = bCfg.items[i].id;
+        if ((subTwigGrow[pid] || 0) > maxProjVis) maxProjVis = subTwigGrow[pid] || 0;
+        if ((itemType[pid] || 0) > maxProjVis) maxProjVis = itemType[pid] || 0;
+      }
+    }
+    if (limbProg <= 0.004 && bioProg <= 0.004 && maxProjVis <= 0.004) return;
 
     const boughEndX = tipX + 62 + canopySway * 0.5;
     const boughEndY = tipY - 64;
@@ -3780,7 +5363,7 @@
       ctx.restore();
     }
 
-    if (bioProg <= 0.004 || !bCfg.bioEditorial) return;
+    if (!bCfg.bioEditorial) return;
 
     const meLay = computeMeEditorialLayout(bCfg, lay);
     const bioColW = meLay.bioColW;
@@ -3793,6 +5376,7 @@
     const wrappedParas = meLay.wrappedParas;
     const totalBioH = meLay.totalBioH;
 
+    if (bioProg > 0.004) {
     if (activeBranch === "me") {
       const tl = worldToScreen(bioLeft, bioTopY);
       const br = worldToScreen(bioRight, bioTopY + totalBioH - paraGap);
@@ -3982,9 +5566,10 @@
     });
 
     ctx.restore();
+    }
 
-    // Mamdouh's Halftone Dot-Screen Portrait + Natural-Color Hover Reveal
-    const pAlpha = smoothstep(0.12, 0.82, bioProg);
+    // Mamdouh's 45° Halftone Taped Zine Portrait + Natural-Color Hover Reveal + Reverse Close Scale (1.0 -> 0.92)
+    const pAlpha = smoothstep(0.06, 0.82, Math.max(bioProg, limbProg * 0.85));
     if (pAlpha > 0.01) {
       const pw = meLay.pw;
       const ph = meLay.ph;
@@ -3992,7 +5577,7 @@
       const py = meLay.py;
       const pcx = px + pw * 0.5;
       const pcy = py + ph * 0.5;
-      const pAngle = -0.052;
+      const pAngle = -0.048;
 
       if (activeBranch === "me") {
         const ptl = worldToScreen(px - meLay.rotPadX * 0.4, py - meLay.rotPadY * 0.4);
@@ -4017,7 +5602,8 @@
 
       if (mePortraitBuffer || mePortraitColorBuffer) {
         const smoothHoverMix = smoothstep(0, 1, portraitHoverMix);
-        const liftScale = 1 + 0.018 * smoothHoverMix;
+        const closeShrink = 0.92 + 0.08 * pAlpha;
+        const liftScale = closeShrink * (1 + 0.022 * smoothHoverMix);
 
         ctx.save();
         ctx.translate(pcx, pcy);
@@ -4280,7 +5866,7 @@
               ? "rgba(220, 224, 232, 0.14)"
               : isFltHov
                 ? "rgba(198, 202, 210, 0.09)"
-                : "rgba(0, 22, 46, 0.55)";
+                : "rgba(19, 22, 28, 0.68)";
             ctx.fill();
             ctx.strokeStyle = isActiveFlt
               ? "rgba(220, 224, 232, 0.82)"
@@ -4363,19 +5949,32 @@
       const isItErasing = Boolean(itemErasing[id]);
       const sumFactor = siblingSumFactor[id] === undefined ? 1 : siblingSumFactor[id];
 
-      const boxL = mp.projLeft + canopySway * 0.2;
-      const boxR = mp.projRight + canopySway * 0.2;
+      const rowLeft = mp.projLeft + canopySway * 0.2;
+      const rowRight = mp.projRight + canopySway * 0.2;
+      const boxL = mp.textLeft + canopySway * 0.2;
+      const boxR = mp.textRight + canopySway * 0.2;
+      const photoSlotL = mp.photoSlotLeft + canopySway * 0.2;
+      const photoSlotR = mp.photoSlotRight + canopySway * 0.2;
       const nodeY = mp.jointY;
       const vxNode = vineXAt(nodeY - 4);
       const twigTargetX = rtl ? boxR + 6 : boxL - 6;
 
       const itemHitId = "item:" + id;
-      const isItemHov = hoveredHit && hoveredHit.id === itemHitId;
-      const isItemOpen = activeItem === id;
+      const photoHitId = "proj-photo:" + id;
+      const isDirectPhotoHov = Boolean(hoveredHit && hoveredHit.id === photoHitId);
+      const isItemHov = Boolean(
+        hoveredHit && (hoveredHit.id === itemHitId || hoveredHit.id === photoHitId)
+      );
+      const isItemOpen = activeItem === id || expandedItems.has(id);
       hoverAmt[itemHitId] =
         (hoverAmt[itemHitId] || 0) +
         ((isItemHov || isItemOpen ? 1 : 0) - (hoverAmt[itemHitId] || 0)) * 0.24;
       const ihp = hoverAmt[itemHitId];
+
+      const pHover = clamp(projectPhotoHover[id] || 0, 0, 1);
+      projectPhotoLift[id] = pHover;
+      const pLift = pHover;
+      let currentPhotoHitRect = null;
 
       if (stProg > 0.01) {
         const twigEnd = drawGrowingShoot(
@@ -4429,14 +6028,111 @@
         ctx.textBaseline = "alphabetic";
 
         drawSkyTextFeather(
-          (boxL + boxR) * 0.5,
+          (rowLeft + rowRight) * 0.5,
           mp.topY + mp.blockH * 0.5,
-          Math.max(96, mp.blockH * 0.95) * clamp(tProg * 1.3, 0.25, 1),
-          boxL - 22,
+          Math.max(108, mp.blockH * 0.95) * clamp(tProg * 1.3, 0.25, 1),
+          rowLeft - 22,
           mp.topY - 10,
           mp.projColW + 44,
           mp.blockH + 20
         );
+
+        // Render Dual-Buffer (256x198) Taped 45° Halftone + Full-Color Hover Zine Picture
+        // (left side in AR RTL, right side in EN LTR — strictly inside [photoSlotL .. photoSlotR]!)
+        const pCard = projectPhotoCards[id];
+        const photoAlpha = clamp(tProg * 1.35, 0, 1);
+        if (pCard && (pCard.halftoneCanvas || pCard.canvas) && photoAlpha > 0.02) {
+          const hCanvas = pCard.halftoneCanvas || pCard.canvas;
+          const cCanvas = pCard.colorCanvas || null;
+          const closeShrink = 0.92 + 0.08 * photoAlpha;
+          const hoverScale = 1.0 + 0.09 * pHover;
+          const finalScale = closeShrink * hoverScale;
+          const baseTilt = pCard.tiltRad || 0;
+          // Gentle 1.2° (0.0209 rad) tilt settle as hover brings full colors to life
+          const tiltSign = baseTilt >= 0 ? 1 : -1;
+          const finalTilt = baseTilt - tiltSign * Math.min(Math.abs(baseTilt), 0.0209) * pHover;
+
+          const cardWWorld = mp.photoW; // 84 desktop/tablet, 68 mobile
+          const cardHWorld = mp.photoH; // 66 desktop/tablet, 54 mobile
+          const drawBufW = cardWWorld * (pCard.bufW / pCard.cardW);
+          const drawBufH = cardHWorld * (pCard.bufH / pCard.cardH);
+          const photoCx = (photoSlotL + photoSlotR) * 0.5;
+          const photoCy = mp.topY + Math.max(cardHWorld * 0.5 + 4, mp.blockH * 0.48);
+
+          const halftoneAlpha = photoAlpha * (1 - pHover * 0.92);
+          const colorAlpha = cCanvas ? photoAlpha * pHover : 0;
+
+          ctx.save();
+          ctx.translate(photoCx, photoCy);
+          ctx.rotate(finalTilt);
+          ctx.scale(finalScale, finalScale);
+          if (hCanvas && halftoneAlpha > 0.002) {
+            ctx.globalAlpha = siblingDim * halftoneAlpha;
+            ctx.drawImage(hCanvas, -drawBufW * 0.5, -drawBufH * 0.5, drawBufW, drawBufH);
+          }
+          if (cCanvas && colorAlpha > 0.002) {
+            ctx.globalAlpha = siblingDim * colorAlpha;
+            ctx.drawImage(cCanvas, -drawBufW * 0.5, -drawBufH * 0.5, drawBufW, drawBufH);
+          }
+          ctx.restore();
+
+          // Exact axis-aligned world & screen bounding box of rotated+scaled card body for 0 px² collision audit
+          const cosT = Math.abs(Math.cos(finalTilt));
+          const sinT = Math.abs(Math.sin(finalTilt));
+          const halfExtX = (cardWWorld * 0.5 * cosT + cardHWorld * 0.5 * sinT) * finalScale;
+          const halfExtY = (cardWWorld * 0.5 * sinT + cardHWorld * 0.5 * cosT) * finalScale;
+          const pWorldL = photoCx - halfExtX;
+          const pWorldR = photoCx + halfExtX;
+          const pWorldT = photoCy - halfExtY;
+          const pWorldB = photoCy + halfExtY;
+
+          currentPhotoHitRect = {
+            x: pWorldL - 3,
+            y: pWorldT - 3,
+            w: (pWorldR - pWorldL) + 6,
+            h: (pWorldB - pWorldT) + 6
+          };
+
+          lastMeProjectSubBoxes.push({
+            projectId: id,
+            part: "photo",
+            left: pWorldL,
+            right: pWorldR,
+            top: pWorldT,
+            bottom: pWorldB
+          });
+
+          const pScrTL = worldToScreen(pWorldL, pWorldT);
+          const pScrBR = worldToScreen(pWorldR, pWorldB);
+          lastMeProjectPhotoBoxes.push({
+            projectId: id,
+            sceneKey: pCard.sceneKey,
+            bufW: pCard.bufW,
+            bufH: pCard.bufH,
+            pitch: pCard.pitch,
+            dotCount: pCard.dotCount,
+            tapeCount: pCard.tapeCount,
+            hover: pHover,
+            isDirectPhotoHov,
+            halftoneAlpha,
+            colorAlpha,
+            isRealPhoto: Boolean(pCard.isRealPhoto),
+            loadedUrl: pCard.loadedUrl || null,
+            rebuildCount: pCard.rebuildCount || 1,
+            scale: finalScale,
+            tiltRad: finalTilt,
+            worldLeft: pWorldL,
+            worldRight: pWorldR,
+            worldTop: pWorldT,
+            worldBottom: pWorldB,
+            textWorldLeft: boxL,
+            textWorldRight: boxR,
+            screenLeft: pScrTL.x,
+            screenRight: pScrBR.x,
+            screenTop: pScrTL.y,
+            screenBottom: pScrBR.y
+          });
+        }
 
         let cy = mp.topY;
         const headerAlpha = clamp(tProg * 1.65, 0, 1);
@@ -4469,12 +6165,12 @@
             const bH = 18.0;
             drawRoundedCapsulePath(bLeft, bTop, mp.badgePillW, bH, 9);
             ctx.fillStyle = isItemOpen || ihp > 0.15
-              ? "rgba(220, 224, 232, 0.15)"
-              : "rgba(198, 202, 210, 0.10)";
+              ? "rgba(223, 226, 232, 0.15)"
+              : "rgba(200, 203, 210, 0.10)";
             ctx.fill();
             ctx.strokeStyle = isItemOpen || ihp > 0.15
-              ? "rgba(220, 224, 232, 0.72)"
-              : "rgba(154, 162, 178, 0.55)";
+              ? "rgba(223, 226, 232, 0.72)"
+              : "rgba(148, 153, 166, 0.55)";
             ctx.lineWidth = 0.9;
             if (typeof ctx.setLineDash === "function") {
               ctx.setLineDash([2.2, 2.2]);
@@ -4529,16 +6225,20 @@
                 bottom: cy + 17
               });
             } else {
-              const mBaseY = cy + 22 + 11.5;
-              drawChalkText(mp.metaStr, textX, mBaseY, CHALK_MUTED, mp.metaFontPx, 1.0);
-              const mLeft = rtl ? boxR - mp.metaW : boxL;
-              lastMeProjectSubBoxes.push({
-                projectId: id,
-                part: "meta",
-                left: mLeft,
-                right: mLeft + mp.metaW,
-                top: cy + 21,
-                bottom: cy + 36
+              const mLines = mp.metaLines && mp.metaLines.length ? mp.metaLines : [mp.metaStr];
+              mLines.forEach((mLn, mIdx) => {
+                const mBaseY = cy + 22 + 11.5 + mIdx * 15.5;
+                drawChalkText(mLn, textX, mBaseY, CHALK_MUTED, mp.metaFontPx, 1.0);
+                const mwLine = Math.min(mp.textColW, ctx.measureText(mLn).width);
+                const mLeft = rtl ? boxR - mwLine : boxL;
+                lastMeProjectSubBoxes.push({
+                  projectId: id,
+                  part: "meta-" + mIdx,
+                  left: mLeft,
+                  right: mLeft + mwLine,
+                  top: cy + 21 + mIdx * 15.5,
+                  bottom: cy + 35.5 + mIdx * 15.5
+                });
               });
             }
           }
@@ -4583,7 +6283,7 @@
               );
             }
             drawChalkText(drawnPart, textX, tBaseY, titleCol, 13.6, 1.0);
-            const fullDrawnW = Math.min(mp.projColW, ctx.measureText(drawnPart).width);
+            const fullDrawnW = Math.min(mp.textColW, ctx.measureText(drawnPart).width);
             const tLeft = rtl ? boxR - fullDrawnW : boxL;
             lastMeProjectSubBoxes.push({
               projectId: id,
@@ -4615,7 +6315,7 @@
         );
         if (sumProg > 0.05) {
           mp.sumLines.forEach((sln, sIdx) => {
-            const sw = Math.min(mp.projColW, ctx.measureText(sln).width);
+            const sw = Math.min(mp.textColW, ctx.measureText(sln).width);
             const sL = rtl ? boxR - sw : boxL;
             const sTop = sumStartCy + sIdx * mp.sumStepY;
             lastMeProjectSubBoxes.push({
@@ -4629,9 +6329,10 @@
           });
         }
 
+        const rowBottomY = Math.max(cy, mp.topY + mp.blockH - 4);
         if (activeBranch === "me") {
-          const stl = worldToScreen(boxL, mp.topY);
-          const sbr = worldToScreen(boxR, cy);
+          const stl = worldToScreen(rowLeft, mp.topY);
+          const sbr = worldToScreen(rowRight, rowBottomY);
           lastMeProjectsScreenBoxes.push({
             id,
             category: mp.item.category || "all",
@@ -4651,11 +6352,23 @@
             kind: "item",
             branchKey: "me",
             itemId: id,
-            x: boxL - 6,
+            x: rowLeft - 6,
             y: mp.topY - 4,
             w: mp.projColW + 12,
-            h: cy - mp.topY + 6
+            h: rowBottomY - mp.topY + 8
           });
+          if (currentPhotoHitRect) {
+            worldHitboxes.push({
+              id: photoHitId,
+              kind: "project-photo",
+              branchKey: "me",
+              itemId: id,
+              x: currentPhotoHitRect.x,
+              y: currentPhotoHitRect.y,
+              w: currentPhotoHitRect.w,
+              h: currentPhotoHitRect.h
+            });
+          }
         }
 
         ctx.restore();
@@ -4665,7 +6378,7 @@
       const dTypeProg = lvl2Type[id] || 0;
       const isD2Erasing = Boolean(lvl2Erasing[id]);
       if (s2Raw > 0.005 || dTypeProg > 0.005) {
-        const itProg = easeOutCubic(s2Raw);
+        const itProg = s2Raw;
         const s2X = mp.lvl2StartX + canopySway * 0.2;
         const s2Y = nodeY;
         const e2X = mp.lvl2TipX + canopySway * 0.15;
@@ -4955,7 +6668,8 @@
 
     function drawPuffCluster(puff, pIdx) {
       if (expBoughGrow <= puff.t - 0.03) return;
-      const bloom = easeOutCubic(clamp((expBoughGrow - (puff.t - 0.03)) / 0.17, 0, 1));
+      const rawBloom = clamp((expBoughGrow - (puff.t - 0.03)) / 0.17, 0, 1);
+      const bloom = expBoughRetracting ? easeInOutCubic(rawBloom) : easeOutCubic(rawBloom);
       if (bloom <= 0.01 || !puff.canvas) return;
 
       const pt = boughPointAt(puff.t);
@@ -4967,7 +6681,7 @@
 
       const cx = pt.x + nx * puff.nOff;
       const cy = pt.y + ny * puff.nOff;
-      const sc = 0.56 + 0.44 * bloom;
+      const sc = expBoughRetracting ? (0.30 + 0.70 * bloom) : (0.56 + 0.44 * bloom);
       const dw = puff.drawW * sc;
       const dh = puff.drawH * sc;
 
@@ -5268,7 +6982,7 @@
       const dTypeProg = lvl2Type[id] || 0;
       const isD2Erasing = Boolean(lvl2Erasing[id]);
       if (s2Raw > 0.005 || dTypeProg > 0.005) {
-        const itProg = easeOutCubic(s2Raw);
+        const itProg = s2Raw;
         const s2X = yn.s2StartX + swayX;
         const s2Y = yn.s2StartY + swayY;
         const shootEndX = yn.s2TipX + swayX * 0.65;
@@ -5527,8 +7241,8 @@
       const twigProg = easeOutCubic(mainTwigGrow[key]);
       const labelTypeProg = mainLabelType[key];
       const labelErasing = mainLabelErasing[key];
-      const limbRaw = branchLimbGrow[key];
-      const limbProg = easeOutCubic(limbRaw);
+      const limbProg = branchLimbGrow[key];
+      const limbRaw = limbProg;
       const uProg = underlineProg[key];
 
       const lay = computeBranchLayout(bCfg);
@@ -5826,7 +7540,7 @@
           const dTypeProg = lvl2Type[id] || 0;
           const isD2Erasing = Boolean(lvl2Erasing[id]);
           if (s2Raw > 0.005 || dTypeProg > 0.005) {
-            const itProg = easeOutCubic(s2Raw);
+            const itProg = s2Raw;
             const s2X = mi.lvl2StartX + canopySway * 0.35;
             const s2Y = targetSubY;
             const e2X = mi.lvl2TipX + canopySway * 0.2;
@@ -6112,10 +7826,10 @@
 
     if (visBot > -6) {
       const earthGrad = ctx.createLinearGradient(0, 0, 0, Math.max(280, fillBottomY));
-      earthGrad.addColorStop(0, "#00162d");
+      earthGrad.addColorStop(0, "#15181F");
       earthGrad.addColorStop(0.22, EARTH_CORE);
-      earthGrad.addColorStop(0.75, "#001226");
-      earthGrad.addColorStop(1, "#001021");
+      earthGrad.addColorStop(0.72, "#101318");
+      earthGrad.addColorStop(1, EARTH_DEEP);
 
       ctx.fillStyle = earthGrad;
       ctx.beginPath();
@@ -6160,7 +7874,7 @@
         ctx.restore();
       }
 
-      // Meandering dotted silver trails (`• • • • •`) winding through #00152b soil (matching 9AA84C5A!)
+      // Meandering dotted silver trails (`• • • • •`) winding through #13161C soil (matching 9AA84C5A!)
       for (let ti = 0; ti < undergroundDotTrails.length; ti++) {
         const trail = undergroundDotTrails[ti];
         for (let di = 0; di < trail.length; di++) {
@@ -6311,17 +8025,18 @@
       return;
     }
 
-    const isPhone = vw < 640;
-    const isTablet = vw >= 640 && vw < 900;
+    const isPhone = vw < 680;
+    const isTablet = vw >= 680 && vw < 900;
     const isAr = lang === "ar";
-    const sidePad = isPhone ? 14 : isTablet ? 20 : 24;
-    const topY = isPhone ? 14 : isTablet ? 16 : 18;
+    // Safe inset padding >= 24px desktop, >= 16px mobile inside #vintage-frame
+    const sidePad = isPhone ? 18 : isTablet ? 25 : 28;
+    const topY = isPhone ? 18 : isTablet ? 25 : 26;
     const x = isAr ? vw - sidePad : sidePad;
     const maxHeaderWidth = isPhone
-      ? Math.max(150, vw - 96)
+      ? Math.max(146, vw - 108)
       : isTablet
-        ? Math.min(vw - 108, 420)
-        : Math.min(vw - 124, 460);
+        ? Math.min(vw - 122, 420)
+        : Math.min(vw - 138, 460);
 
     const namePx = isPhone ? 12.2 : isTablet ? 13 : 13.5;
     const rolePx = isPhone ? 10.6 : isTablet ? 11.2 : 11.8;
@@ -6401,10 +8116,11 @@
     ctx.restore();
 
     const langBtnW = isPhone ? 54 : 60;
-    const langBtnMargin = isPhone ? 12 : isTablet ? 18 : 22;
+    const langBtnMargin = isPhone ? 17 : isTablet ? 24 : 26;
+    const langBtnTop = isPhone ? 17 : isTablet ? 24 : 25;
     const langBtnBox = isAr
-      ? { left: langBtnMargin, right: langBtnMargin + langBtnW, top: topY - 2, bottom: topY + 28 }
-      : { left: vw - langBtnMargin - langBtnW, right: vw - langBtnMargin, top: topY - 2, bottom: topY + 28 };
+      ? { left: langBtnMargin, right: langBtnMargin + langBtnW, top: langBtnTop, bottom: langBtnTop + 28 }
+      : { left: vw - langBtnMargin - langBtnW, right: vw - langBtnMargin, top: langBtnTop, bottom: langBtnTop + 28 };
 
     lastHeaderScreenBox = {
       left: isAr ? x - maxRenderedLineW : x,
@@ -6494,19 +8210,19 @@
     const rootsRaw = clamp(introElapsed / 1.35, 0, 1);
     rootsGrow = easeOutCubic(rootsRaw);
 
-    // 2. Gentle camera zoom ease (1.05 -> 1.0) during intro
-    const camAlpha = 1 - Math.exp(-7.2 * dt);
+    // 2. Smooth, dreamy reference-faithful camera glide (damping 3.5 -> ~1.0s-1.2s glide; direct drag stays 0ms instant)
+    const camEase = 1 - Math.exp(-3.5 * dt);
     const goalX = targetCam.x + panOffset.x;
     const goalY = targetCam.y + panOffset.y;
-    baseCam.x += (goalX - baseCam.x) * camAlpha;
-    baseCam.y += (goalY - baseCam.y) * camAlpha;
-    baseCam.zoom += (targetCam.zoom - baseCam.zoom) * camAlpha;
+    baseCam.x += (goalX - baseCam.x) * camEase;
+    baseCam.y += (goalY - baseCam.y) * camEase;
+    baseCam.zoom += (targetCam.zoom - baseCam.zoom) * camEase;
 
     if (!activeBranch && !hasOpenedAnyBranch) {
-      const camGlideP = easeOutCubic(clamp(introElapsed / 1.45, 0, 1));
+      const camGlideP = easeOutCubic(clamp(introElapsed / 1.55, 0, 1));
       introCamRem = 1 - camGlideP;
     } else {
-      introCamRem *= Math.exp(-8.5 * dt);
+      introCamRem *= Math.exp(-3.5 * dt);
       if (introCamRem < 0.0005) introCamRem = 0;
     }
 
@@ -6519,17 +8235,17 @@
     starMouse.x += (starMouseTarget.x - starMouse.x) * starEase;
     starMouse.y += (starMouseTarget.y - starMouse.y) * starEase;
 
-    // 3. Boot identity whisper types in crisply char-by-char (0.2s - 1.0s), erases backwards (~16ms/char)
-    if (!activeBranch && !hasOpenedAnyBranch && introElapsed <= 1.05) {
+    // 3. Boot identity whisper types in calmly (~25% gentler rate) & erases smoothly (~0.38s)
+    if (!activeBranch && !hasOpenedAnyBranch && introElapsed <= 1.22) {
       identityErasing = false;
-      identityType = clamp((introElapsed - 0.20) / 0.80, 0, 1);
+      identityType = clamp((introElapsed - 0.22) / 0.98, 0, 1);
     } else {
-      const idGoal = !activeBranch && introElapsed >= 0.20 ? 1 : 0;
+      const idGoal = !activeBranch && introElapsed >= 0.22 ? 1 : 0;
       identityErasing = identityType > idGoal;
-      identityType = approach(identityType, idGoal, 1 / 0.80, 1 / 0.28, dt);
+      identityType = approach(identityType, idGoal, 1 / 0.98, 1 / 0.38, dt);
     }
 
-    // 4. Portrait hover interpolation
+    // 4. Portrait & Project Photo hover interpolation
     if (activeBranch !== "me") {
       isPortraitHovered = false;
       portraitTouchToggled = false;
@@ -6537,9 +8253,31 @@
       isPortraitHovered = hitTestPortrait(lastPointerScreen.x, lastPointerScreen.y);
     }
     const hoverGoal = activeBranch === "me" && isPortraitHovered ? 1 : 0;
-    portraitHoverMix = approach(portraitHoverMix, hoverGoal, 1 / 0.30, 1 / 0.30, dt);
+    portraitHoverMix = approach(portraitHoverMix, hoverGoal, 1 / 0.32, 1 / 0.32, dt);
 
     const d = getLocale();
+    const photoHoverEase = 1 - Math.exp(-8.5 * dt);
+    const meProjItems = (d && d.branches && d.branches.me && d.branches.me.items) || [];
+    for (let pIdx = 0; pIdx < meProjItems.length; pIdx++) {
+      const pid = meProjItems[pIdx].id;
+      const isProjHov =
+        activeBranch === "me" &&
+        hoveredHit &&
+        (hoveredHit.id === "proj-photo:" + pid || hoveredHit.id === "item:" + pid);
+      const targetPHov = isProjHov ? 1 : 0;
+      const prevPHov = projectPhotoHover[pid] || 0;
+      let nextPHov = prevPHov + (targetPHov - prevPHov) * photoHoverEase;
+      if (nextPHov < 0.001 && targetPHov === 0) nextPHov = 0;
+      if (nextPHov > 0.999 && targetPHov === 1) nextPHov = 1;
+      projectPhotoHover[pid] = nextPHov;
+    }
+
+    // Gentle crown wind-sway impulse decay when a retracting branch merges back into the olive crown
+    if (crownRustleImpulse > 0.001) {
+      crownRustlePhase += dt;
+      crownRustleImpulse *= Math.exp(-2.4 * dt);
+      if (crownRustleImpulse < 0.001) crownRustleImpulse = 0;
+    }
 
     let maxAnyLimb = 0;
     for (const k of BRANCH_KEYS) {
@@ -6552,139 +8290,209 @@
       const isSelected = activeBranch === k;
       const isHome = activeBranch === null;
 
-      // Exact ~32ms/char discrete branch title typing & ~16ms/char backwards erase!
+      // ~40ms/char (~25% gentler) discrete branch title typing & ~1.85x smooth backwards erase!
       const charCount = Math.max(4, (bCfg.label || "").length);
-      const labelWriteDur = charCount * 0.032;
-      const labelEraseDur = Math.max(0.08, charCount * 0.016);
+      const labelWriteDur = charCount * 0.040;
+      const labelEraseDur = Math.max(0.14, labelWriteDur / 1.85);
       const labelRateUp = 1 / labelWriteDur;
       const labelRateDown = 1 / labelEraseDur;
 
       if (isHome) {
-        // At 1.0s, the 4 canopy shoots extend straight out (0.38s, staggered by 85ms),
-        // and as each shoot reaches 85%, its label types in crisply char-by-char!
-        const twigStart = 1.00 + bIdx * 0.085;
-        if (!hasOpenedAnyBranch && introElapsed < 2.2) {
+        const twigStart = 1.00 + bIdx * 0.095;
+        if (!hasOpenedAnyBranch && introElapsed < 2.35) {
           mainTwigGrow[k] =
             introElapsed <= twigStart
               ? 0
-              : clamp((introElapsed - twigStart) / 0.38, 0, 1);
+              : clamp((introElapsed - twigStart) / 0.50, 0, 1);
         } else {
-          const canExtend = introElapsed > twigStart && maxAnyLimb < 0.42;
-          mainTwigGrow[k] = approach(mainTwigGrow[k], canExtend ? 1 : 0, 1 / 0.38, 3.6, dt);
+          const canExtend = introElapsed > twigStart && maxAnyLimb < 0.44;
+          mainTwigGrow[k] = approach(mainTwigGrow[k], canExtend ? 1 : 0, 1 / 0.50, 1 / 0.44, dt);
         }
 
-        const labelGoal = mainTwigGrow[k] >= 0.85 ? 1 : 0;
+        const labelGoal = mainTwigGrow[k] >= 0.52 ? 1 : 0;
         mainLabelErasing[k] = mainLabelType[k] > labelGoal;
         mainLabelType[k] = approach(mainLabelType[k], labelGoal, labelRateUp, labelRateDown, dt);
-        underlineProg[k] = approach(underlineProg[k], 0, 3.2, 4.1, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 2.2, 2.8, dt);
       } else if (isSelected && k === "experience") {
         // Smoothly retract horizontal resting label/twig as the arching experience bough takes over
         mainLabelErasing[k] = mainLabelType[k] > 0;
-        mainLabelType[k] = approach(mainLabelType[k], 0, labelRateUp, labelRateDown * 1.4, dt);
-        mainTwigGrow[k] = approach(mainTwigGrow[k], mainLabelType[k] > 0.15 ? 1 : 0, 3.6, 4.2, dt);
-        underlineProg[k] = approach(underlineProg[k], 0, 3.2, 4.8, dt);
+        mainLabelType[k] = approach(mainLabelType[k], 0, labelRateUp, labelRateDown * 1.15, dt);
+        mainTwigGrow[k] = approach(mainTwigGrow[k], mainLabelType[k] > 0.18 ? 1 : 0, 2.2, 2.4, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 2.2, 2.8, dt);
       } else if (isSelected) {
-        mainTwigGrow[k] = approach(mainTwigGrow[k], 1, 3.6, 3.4, dt);
+        mainTwigGrow[k] = approach(mainTwigGrow[k], 1, 2.2, 2.2, dt);
         mainLabelErasing[k] = false;
         mainLabelType[k] = approach(mainLabelType[k], 1, labelRateUp, labelRateDown, dt);
-        underlineProg[k] = approach(underlineProg[k], 1, 3.0, 4.1, dt);
+        underlineProg[k] = approach(underlineProg[k], 1, 2.0, 2.6, dt);
       } else {
         mainLabelErasing[k] = mainLabelType[k] > 0;
         mainLabelType[k] = approach(mainLabelType[k], 0, labelRateUp, labelRateDown, dt);
-        const twigGoal = mainLabelType[k] > 0.2 ? 1 : 0;
-        mainTwigGrow[k] = approach(mainTwigGrow[k], twigGoal, 3.2, 3.8, dt);
-        underlineProg[k] = approach(underlineProg[k], 0, 3.2, 4.4, dt);
+        const twigGoal = mainLabelType[k] > 0.22 ? 1 : 0;
+        mainTwigGrow[k] = approach(mainTwigGrow[k], twigGoal, 2.2, 2.3, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 2.2, 2.8, dt);
       }
 
       let maxChildItemType = 0;
+      let maxChildSubTwig = 0;
       bCfg.items.forEach((it) => {
         if ((itemType[it.id] || 0) > maxChildItemType) maxChildItemType = itemType[it.id] || 0;
+        if ((subTwigGrow[it.id] || 0) > maxChildSubTwig) maxChildSubTwig = subTwigGrow[it.id] || 0;
       });
 
+      // Reference-Faithful Calm Branch Opening & Overlapping Closing Choreography:
+      // - Main branches (work, writing, me): open over ~1.05s, close over ~0.92s (with ~0.36s ~1.85x backwards erase overlapping organically)
+      // - Experience arching bough: opens over ~1.38s, closes over ~0.98s
       if (k === "me") {
-        const bioGoal = isSelected && branchLimbGrow.me > 0.34 ? 1 : 0;
+        const bioGoal = isSelected && branchLimbGrow.me >= 0.52 ? 1 : 0;
         meBioErasing = meBioType > bioGoal;
-        meBioType = approach(meBioType, bioGoal, 1 / 0.96, 1 / 0.26, dt);
+        meBioType = approach(meBioType, bioGoal, 1 / 0.98, 1 / 0.36, dt); // ~0.36s calm backwards erase
 
-        const headGoal = isSelected && branchLimbGrow.me > 0.42 ? 1 : 0;
+        const headGoal = isSelected && branchLimbGrow.me >= 0.56 ? 1 : 0;
         meProjectsHeadingErasing = meProjectsHeadingType > headGoal;
-        meProjectsHeadingType = approach(meProjectsHeadingType, headGoal, 1 / 0.55, 1 / 0.22, dt);
+        meProjectsHeadingType = approach(meProjectsHeadingType, headGoal, 1 / 0.70, 1 / 0.35, dt);
 
-        const meLimbGoal = isSelected || meBioType > 0.22 || maxChildItemType > 0.35 ? 1 : 0;
-        branchLimbGrow.me = approach(branchLimbGrow.me, meLimbGoal, 2.4, 3.2, dt);
+        const meHoldWhileText = meBioType > 0.85 || maxChildItemType > 0.85;
+        const meGoal = isSelected ? 1 : meHoldWhileText ? 1 : 0;
+        branchRetracting.me = branchRaw.me > meGoal;
+        branchRaw.me = approach(branchRaw.me, meGoal, 1 / 1.14, 1 / 0.98, dt);
+        branchLimbGrow.me = branchRetracting.me
+          ? easeInOutCubic(branchRaw.me)
+          : easeOrganicBranch(branchRaw.me);
       } else if (k === "experience") {
-        // ~0.92s progressive physical growth (expBoughGrow = easeOutCubic(expBoughRaw))
-        const expGoal = isSelected ? 1 : maxChildItemType > 0.45 ? 1 : 0;
-        expBoughRaw = approach(expBoughRaw, expGoal, 1 / 0.92, 1 / 0.34, dt);
-        expBoughGrow = easeOutCubic(expBoughRaw);
+        const expHoldWhileText = maxChildItemType > 0.85;
+        const expGoal = isSelected ? 1 : expHoldWhileText ? 1 : 0;
+        expBoughRetracting = expBoughRaw > expGoal;
+        expBoughRaw = approach(expBoughRaw, expGoal, 1 / 1.42, 1 / 1.04, dt);
+        expBoughGrow = expBoughRetracting
+          ? easeInOutCubic(expBoughRaw)
+          : easeOutCubic(expBoughRaw);
+        branchRaw.experience = expBoughRaw;
         branchLimbGrow.experience = expBoughGrow;
       } else {
-        const limbGoal = isSelected ? 1 : maxChildItemType > 0.58 ? 1 : 0;
-        branchLimbGrow[k] = approach(branchLimbGrow[k], limbGoal, 2.4, 3.2, dt);
+        const stdHoldWhileText = maxChildItemType > 0.85;
+        const limbGoal = isSelected ? 1 : stdHoldWhileText ? 1 : 0;
+        branchRetracting[k] = branchRaw[k] > limbGoal;
+        branchRaw[k] = approach(branchRaw[k], limbGoal, 1 / 1.14, 1 / 0.98, dt);
+        branchLimbGrow[k] = branchRetracting[k]
+          ? easeInOutCubic(branchRaw[k])
+          : easeOrganicBranch(branchRaw[k]);
       }
 
       bCfg.items.forEach((it, idx) => {
         const id = it.id;
-        const curSub = subTwigGrow[id] || 0;
+        const curSubRaw = subTwigRaw[id] !== undefined ? subTwigRaw[id] : (subTwigGrow[id] || 0);
         const curType = itemType[id] || 0;
         const curSumF = siblingSumFactor[id] === undefined ? 1 : siblingSumFactor[id];
-        const curS2 = lvl2ShootGrow[id] || 0;
+        const curItemRaw = itemRaw[id] !== undefined ? itemRaw[id] : (lvl2ShootGrow[id] || 0);
         const curT2 = lvl2Type[id] || 0;
 
-        const isItemSelected = isSelected && activeItem === id;
+        const isExpClosingThisYear = k === "experience" && closingExpYear === id;
+        const isItemSelected =
+          isSelected &&
+          !isExpClosingThisYear &&
+          (activeItem === id || expandedItems.has(id));
+
+        const lvl2OpenDur = k === "experience" ? 0.85 : 0.68;
+        const lvl2RetractDur = k === "experience" ? 0.72 : 0.62;
 
         if (isItemSelected) {
-          lvl2ShootGrow[id] = approach(curS2, 1, 2.6, 3.4, dt);
-          const t2Goal = lvl2ShootGrow[id] > 0.55 ? 1 : 0;
+          itemRaw[id] = approach(curItemRaw, 1, 1 / lvl2OpenDur, 1 / lvl2RetractDur, dt);
+          lvl2ShootGrow[id] = easeOutCubic(itemRaw[id]);
+          const t2Goal = lvl2ShootGrow[id] >= 0.52 ? 1 : 0;
           lvl2Erasing[id] = curT2 > t2Goal;
-          lvl2Type[id] = approach(curT2, t2Goal, 1 / 0.92, 1 / 0.24, dt);
+          lvl2Type[id] = approach(curT2, t2Goal, 1 / 0.85, 1 / 0.36, dt);
+          if (k === "experience" && activeExpYear === id) {
+            expYearShootRaw = itemRaw[id];
+            expYearShootGrow = lvl2ShootGrow[id];
+          }
         } else {
+          // Calm sub-item collapse: ~0.36s backwards erase overlapping with ~0.62s (~0.72s for experience) cubic-in-out shoot folding
           lvl2Erasing[id] = curT2 > 0;
-          lvl2Type[id] = approach(curT2, 0, 1 / 0.92, 1 / 0.24, dt);
-          const s2Goal = lvl2Type[id] > 0.62 ? 1 : 0;
-          lvl2ShootGrow[id] = approach(curS2, s2Goal, 2.6, 3.5, dt);
+          lvl2Type[id] = approach(curT2, 0, 1 / 0.85, 1 / 0.36, dt);
+          const holdShoot = lvl2Type[id] > 0.84 ? 1 : 0;
+          itemRaw[id] = approach(curItemRaw, holdShoot, 1 / lvl2OpenDur, 1 / lvl2RetractDur, dt);
+          lvl2ShootGrow[id] = easeInOutCubic(itemRaw[id]);
+
+          if (lvl2ShootGrow[id] <= 0.008 && lvl2Type[id] <= 0.008) {
+            itemRaw[id] = 0;
+            lvl2ShootGrow[id] = 0;
+            closingItems.delete(id);
+          }
+
+          if (k === "experience" && activeExpYear === id) {
+            expYearShootRaw = itemRaw[id];
+            expYearShootGrow = lvl2ShootGrow[id];
+            if (expYearShootGrow <= 0.01 && lvl2Type[id] <= 0.01) {
+              expYearShootRaw = 0;
+              expYearShootGrow = 0;
+              lvl2ShootGrow[id] = 0;
+              itemRaw[id] = 0;
+              activeExpYear = null;
+              if (activeItem === id) activeItem = null;
+              if (closingExpYear === id) closingExpYear = null;
+              syncBackButton();
+            }
+          }
         }
 
-        const sumGoal = isSelected && activeItem && activeItem !== id ? 0.28 : 1.0;
-        siblingSumFactor[id] = approach(curSumF, sumGoal, 2.6, 3.2, dt);
+        const sumGoal =
+          isSelected && activeItem && !closingExpYear && activeItem !== id ? 0.28 : 1.0;
+        siblingSumFactor[id] = approach(curSumF, sumGoal, 1.9, 2.2, dt);
 
         if (k === "experience") {
           const nodeT = typeof it.t === "number" ? it.t : 0.16 + idx * 0.15;
           if (isSelected) {
             const sproutThreshold = idx === 5 ? 0.93 : nodeT - 0.02;
             const canSprout = expBoughGrow >= sproutThreshold;
-            subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 3.2, 3.6, dt);
-            const yrGoal = subTwigGrow[id] > 0.55 ? 1 : 0;
+            subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.68, 1 / 0.52, dt);
+            subTwigGrow[id] = canSprout ? easeOutCubic(subTwigRaw[id]) : easeInOutCubic(subTwigRaw[id]);
+            const yrGoal = subTwigGrow[id] >= 0.52 ? 1 : 0;
             itemErasing[id] = curType > yrGoal;
-            itemType[id] = approach(curType, yrGoal, 1 / 0.36, 1 / 0.18, dt);
+            itemType[id] = approach(curType, yrGoal, 1 / 0.46, 1 / 0.34, dt);
           } else {
             itemErasing[id] = curType > 0;
-            itemType[id] = approach(curType, 0, 1 / 0.36, 1 / 0.18, dt);
-            const subGoal = itemType[id] > 0.35 || lvl2Type[id] > 0.25 ? 1 : 0;
-            subTwigGrow[id] = approach(curSub, subGoal, 3.2, 3.8, dt);
+            itemType[id] = approach(curType, 0, 1 / 0.46, 1 / 0.34, dt);
+            const subGoal = (itemType[id] > 0.58 || lvl2ShootGrow[id] > 0.20) && expBoughGrow >= nodeT * 0.85 ? 1 : 0;
+            subTwigRaw[id] = approach(curSubRaw, subGoal, 1 / 0.68, 1 / 0.52, dt);
+            subTwigGrow[id] = easeInOutCubic(subTwigRaw[id]);
           }
         } else if (isSelected && k === "me") {
           const matchesFlt = isMeProjectMatchingFilter(it);
-          const stagger = Math.min(0.45, idx * 0.048);
-          const canSprout = matchesFlt && branchLimbGrow.me > 0.22 + stagger;
-          subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 3.0, 3.8, dt);
-          const itemGoal = matchesFlt && subTwigGrow[id] > 0.58 ? 1 : 0;
+          const stagger = Math.min(0.52, idx * 0.062);
+          const canSprout = matchesFlt && branchLimbGrow.me > 0.24 + stagger;
+          subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.82, 1 / 0.56, dt);
+          subTwigGrow[id] = canSprout ? easeOrganicBranch(subTwigRaw[id]) : easeInOutCubic(subTwigRaw[id]);
+          const itemGoal = matchesFlt && subTwigGrow[id] >= 0.52 ? 1 : 0;
           itemErasing[id] = curType > itemGoal;
-          itemType[id] = approach(curType, itemGoal, 1 / 0.78, 1 / 0.22, dt);
+          itemType[id] = approach(curType, itemGoal, 1 / 0.86, 1 / 0.36, dt);
         } else if (isSelected) {
-          const stagger = Math.min(0.56, idx * 0.065);
-          const canSprout = branchLimbGrow[k] > 0.22 + stagger;
-          subTwigGrow[id] = approach(curSub, canSprout ? 1 : 0, 2.5, 3.3, dt);
-          const itemGoal = subTwigGrow[id] > 0.66 ? 1 : 0;
+          const stagger = Math.min(0.56, idx * 0.085);
+          const canSprout = branchLimbGrow[k] > 0.24 + stagger;
+          subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.82, 1 / 0.56, dt);
+          subTwigGrow[id] = canSprout ? easeOrganicBranch(subTwigRaw[id]) : easeInOutCubic(subTwigRaw[id]);
+          const itemGoal = subTwigGrow[id] >= 0.52 ? 1 : 0;
           itemErasing[id] = curType > itemGoal;
-          itemType[id] = approach(curType, itemGoal, 1 / 0.86, 1 / 0.25, dt);
+          itemType[id] = approach(curType, itemGoal, 1 / 0.90, 1 / 0.36, dt);
         } else {
           itemErasing[id] = curType > 0;
-          itemType[id] = approach(curType, 0, 1 / 0.86, 1 / 0.25, dt);
-          const subGoal = itemType[id] > 0.62 || lvl2Type[id] > 0.28 ? 1 : 0;
-          subTwigGrow[id] = approach(curSub, subGoal, 2.5, 3.4, dt);
+          itemType[id] = approach(curType, 0, 1 / 0.90, 1 / 0.36, dt);
+          const subGoal = itemType[id] > 0.62 || lvl2ShootGrow[id] > 0.22 ? 1 : 0;
+          subTwigRaw[id] = approach(curSubRaw, subGoal, 1 / 0.82, 1 / 0.56, dt);
+          subTwigGrow[id] = easeInOutCubic(subTwigRaw[id]);
         }
       });
+
+      // Clear closingBranch cleanly once reverse botanical retraction completes (<= 0.005)
+      if (closingBranch === k && !isSelected) {
+        const limbDone = branchLimbGrow[k] <= 0.005;
+        const bioDone = k !== "me" || (meBioType <= 0.005 && meProjectsHeadingType <= 0.005);
+        if (limbDone && maxChildItemType <= 0.005 && maxChildSubTwig <= 0.005 && bioDone) {
+          if (k === "me" && activeBranch !== "me") {
+            meProjectFilter = "all";
+          }
+          closingBranch = null;
+        }
+      }
     });
   }
 
@@ -6701,6 +8509,7 @@
 
     frameStrokeTextCalls = 0;
     frameFillTextCalls = 0;
+    frameChalkPatternCalls = 0;
 
     stepAnimations(dt);
 
@@ -6709,15 +8518,15 @@
     const skyGrad = ctx.createRadialGradient(
       treeScreen.x,
       treeScreen.y,
-      20,
+      18,
       treeScreen.x,
       treeScreen.y,
-      Math.max(vw, vh) * 0.85
+      Math.max(vw, vh) * 0.88
     );
-    ctx.fillStyle = SKY_CORE;
+    ctx.fillStyle = SKY_EDGE;
     ctx.fillRect(0, 0, vw, vh);
     skyGrad.addColorStop(0, SKY_LIFT);
-    skyGrad.addColorStop(0.42, SKY_CORE);
+    skyGrad.addColorStop(0.46, SKY_CORE);
     skyGrad.addColorStop(1, SKY_EDGE);
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, vw, vh);
@@ -6734,6 +8543,7 @@
     lastBioHighlightLogs = [];
     lastMeFilterScreenBoxes = [];
     lastMeProjectSubBoxes = [];
+    lastMeProjectPhotoBoxes = [];
     lastMeProjectActionBoxes = [];
 
     lastRenderedStars = [];
@@ -6857,7 +8667,7 @@
 
       const coreR = s.glint ? (1.0 + 0.28 * glint * s.sparkleScale) : s.r;
       const coreAlpha = clamp(s.alpha * tw * 0.88 + glint * 0.26 + alphaBoost, 0, 0.90);
-      const rgbStr = s.glint || s.bright || alphaBoost > 0.05 ? "220, 224, 232" : "198, 202, 210";
+      const rgbStr = s.glint || s.bright || alphaBoost > 0.05 ? "223, 226, 232" : "200, 203, 210";
       ctx.fillStyle = `rgba(${rgbStr}, ${coreAlpha.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(sx, sy, coreR, 0, Math.PI * 2);
@@ -7008,17 +8818,70 @@
     cam.y = baseCam.y;
   }
 
+  function collapseSubItemSmoothly(itemId) {
+    if (!itemId) return;
+    expandedItems.delete(itemId);
+    closingItems.add(itemId);
+    if (activeBranch === "experience" && activeExpYear === itemId) {
+      // Experience Level 2 -> Level 1: keep activeExpYear until expYearShootGrow <= 0.01!
+      closingExpYear = itemId;
+      triggerCrownRustle(0.5);
+    } else {
+      if (activeItem === itemId) activeItem = null;
+      triggerCrownRustle(0.35);
+    }
+    syncCameraToActiveState(false);
+  }
+
+  function transitionToBranch(nextBranch) {
+    const resolved = nextBranch === "projects" ? "me" : (nextBranch || null);
+    if (activeBranch && activeBranch !== resolved) {
+      closingBranch = activeBranch;
+      triggerCrownRustle(1.0);
+    }
+    if (activeItem) {
+      expandedItems.delete(activeItem);
+      closingItems.add(activeItem);
+      activeItem = null;
+    }
+    if (activeExpYear) {
+      closingExpYear = activeExpYear;
+      if (resolved !== "experience") {
+        activeExpYear = null;
+        closingExpYear = null;
+      }
+    }
+    if (resolved === "me" && activeBranch !== "me") {
+      meProjectFilter = "all";
+    }
+    if (closingBranch === resolved) {
+      closingBranch = null;
+    }
+    activeBranch = resolved;
+    syncCameraToActiveState(false);
+  }
+
   function stepBackOneLevel() {
     resetPanOffset();
-    if (activeItem) {
-      activeItem = null;
-      syncCameraToActiveState(false);
+    // Level 2 -> Level 1 in Experience: retract expYearShootGrow (1.0 -> 0.0 over ~0.34s) & glide to Level-1 bough
+    if (activeBranch === "experience" && activeExpYear && !closingExpYear) {
+      collapseSubItemSmoothly(activeExpYear);
       return true;
     }
+    // Level 2 -> Level 1 in standard branches (work, writing, me)
+    if (activeItem && !closingExpYear) {
+      collapseSubItemSmoothly(activeItem);
+      return true;
+    }
+    // Level 1 -> Home: 2-stage backwards typewriter erase + reverse Bezier retraction + crown rustle!
     if (activeBranch) {
-      activeBranch = null;
-      meProjectFilter = "all";
-      syncCameraToActiveState(false);
+      if (activeExpYear) {
+        closingItems.add(activeExpYear);
+        activeExpYear = null;
+        closingExpYear = null;
+        activeItem = null;
+      }
+      transitionToBranch(null);
       return true;
     }
     return false;
@@ -7049,7 +8912,9 @@
 
     if (hit.kind === "project-jump") {
       resetPanOffset();
-      activeBranch = "me";
+      if (activeBranch !== "me") {
+        transitionToBranch("me");
+      }
       const d = getLocale();
       const targetProj =
         d && d.branches && d.branches.me && Array.isArray(d.branches.me.items)
@@ -7058,8 +8923,12 @@
       if (targetProj && !isMeProjectMatchingFilter(targetProj)) {
         meProjectFilter = "all";
       }
+      subTwigRaw[hit.projectId] = 1;
       subTwigGrow[hit.projectId] = Math.max(subTwigGrow[hit.projectId] || 0, 1);
       itemType[hit.projectId] = Math.max(itemType[hit.projectId] || 0, 1);
+      expandedItems.clear();
+      expandedItems.add(hit.projectId);
+      closingItems.delete(hit.projectId);
       activeItem = hit.projectId;
       syncCameraToActiveState(false);
       return;
@@ -7072,7 +8941,7 @@
       if (activeItem && d && d.branches && d.branches.me && Array.isArray(d.branches.me.items)) {
         const curOpen = d.branches.me.items.find((it) => it.id === activeItem);
         if (curOpen && !isMeProjectMatchingFilter(curOpen)) {
-          activeItem = null;
+          collapseSubItemSmoothly(activeItem);
         }
       }
       resetPanOffset();
@@ -7114,18 +8983,35 @@
       if (activeBranch === hit.branchKey) {
         stepBackOneLevel();
       } else {
-        activeBranch = hit.branchKey;
-        activeItem = null;
-        syncCameraToActiveState(false);
+        transitionToBranch(hit.branchKey);
       }
       return;
     }
 
-    if (hit.kind === "item") {
+    if (hit.kind === "item" || hit.kind === "project-photo") {
       resetPanOffset();
-      activeBranch = hit.branchKey;
-      activeItem = activeItem === hit.itemId ? null : hit.itemId;
-      syncCameraToActiveState(false);
+      if (activeBranch !== hit.branchKey) {
+        transitionToBranch(hit.branchKey);
+      }
+      const isAlreadyOpen =
+        (activeItem === hit.itemId && closingExpYear !== hit.itemId) ||
+        expandedItems.has(hit.itemId);
+      if (isAlreadyOpen) {
+        collapseSubItemSmoothly(hit.itemId);
+      } else {
+        if (activeItem && activeItem !== hit.itemId) {
+          expandedItems.delete(activeItem);
+          closingItems.add(activeItem);
+        }
+        expandedItems.add(hit.itemId);
+        closingItems.delete(hit.itemId);
+        activeItem = hit.itemId;
+        if (hit.branchKey === "experience") {
+          activeExpYear = hit.itemId;
+          closingExpYear = null;
+        }
+        syncCameraToActiveState(false);
+      }
     }
   }
 
@@ -8613,13 +10499,13 @@
     if (playing) {
       btnPlay.innerHTML =
         '<svg class="play-svg" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-        '<rect x="2.5" y="2.2" width="3.2" height="9.6" rx="0.7" fill="#001830"/>' +
-        '<rect x="8.3" y="2.2" width="3.2" height="9.6" rx="0.7" fill="#001830"/>' +
+        '<rect x="2.5" y="2.2" width="3.2" height="9.6" rx="0.7" fill="#0D1016"/>' +
+        '<rect x="8.3" y="2.2" width="3.2" height="9.6" rx="0.7" fill="#0D1016"/>' +
         "</svg>";
     } else {
       btnPlay.innerHTML =
         '<svg class="play-svg" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-        '<path d="M2.6 1.9L12.1 7L2.6 12.1V1.9Z" fill="#001830" stroke="#001830" stroke-width="0.8" stroke-linejoin="round"/>' +
+        '<path d="M2.6 1.9L12.1 7L2.6 12.1V1.9Z" fill="#0D1016" stroke="#0D1016" stroke-width="0.8" stroke-linejoin="round"/>' +
         "</svg>";
     }
   }
@@ -8719,12 +10605,31 @@
     });
   }
 
+  function syncVintageFrameMiterSeams() {
+    if (typeof document === "undefined") return;
+    const fw = vw < 680 ? 9 : 14;
+    const setLine = (id, x1, y1, x2, y2) => {
+      const el = document.getElementById(id);
+      if (el && typeof el.setAttribute === "function") {
+        el.setAttribute("x1", String(x1));
+        el.setAttribute("y1", String(y1));
+        el.setAttribute("x2", String(x2));
+        el.setAttribute("y2", String(y2));
+      }
+    };
+    setLine("miter-seam-tl", 0, 0, fw, fw);
+    setLine("miter-seam-tr", vw, 0, vw - fw, fw);
+    setLine("miter-seam-bl", 0, vh, fw, vh - fw);
+    setLine("miter-seam-br", vw, vh, vw - fw, vh - fw);
+  }
+
   function handleResize() {
     vw = window.innerWidth;
     vh = window.innerHeight;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.floor(vw * dpr);
     canvas.height = Math.floor(vh * dpr);
+    syncVintageFrameMiterSeams();
     syncCameraToActiveState(false);
   }
 
@@ -8739,7 +10644,14 @@
       return {
         lang,
         activeBranch,
+        closingBranch,
         activeItem,
+        activeExpYear,
+        closingExpYear,
+        expYearShootGrow,
+        crownRustleImpulse,
+        expandedItems: Array.from(expandedItems),
+        closingItems: Array.from(closingItems),
         introElapsed,
         introTreeProgress,
         treeGrow,
@@ -8752,15 +10664,20 @@
         portraitBounds: portraitBounds ? { ...portraitBounds } : null,
         hasPortraitMonoBuffer: Boolean(mePortraitBuffer),
         hasPortraitColorBuffer: Boolean(mePortraitColorBuffer),
+        skyGlowColor: SKY_LIFT,
         skyColor: SKY_CORE,
+        skyEdgeColor: SKY_EDGE,
         chalkColor: CHALK,
         chalkTreeColor: CHALK_TREE,
         chalkBrightColor: CHALK_BRIGHT,
         chalkMutedColor: CHALK_MUTED,
+        shadowInkColor: SHADOW_INK,
+        pillBgColor: PILL_BG,
         fontEn: FONT_EN,
         fontAr: FONT_AR,
         activeCanvasFont: fontFamilyFor(""),
         earthColor: EARTH_CORE,
+        earthDeepColor: EARTH_DEEP,
         treeSize: { w: TREE_W, h: TREE_H },
         rootsSize: { w: ROOTS_W, h: ROOTS_H },
         hasTreeGrowAt: Boolean(treeGrowAt),
@@ -8769,11 +10686,18 @@
         mainTwigGrow: { ...mainTwigGrow },
         mainLabelType: { ...mainLabelType },
         underlineProg: { ...underlineProg },
+        branchRaw: { ...branchRaw },
+        branchGrow: { ...branchGrow },
         branchLimbGrow: { ...branchLimbGrow },
         subTwigGrow: { ...subTwigGrow },
         itemType: { ...itemType },
+        itemErasing: { ...itemErasing },
+        itemGrow: { ...itemGrow },
         lvl2ShootGrow: { ...lvl2ShootGrow },
         lvl2Type: { ...lvl2Type },
+        lvl2Erasing: { ...lvl2Erasing },
+        meBioType,
+        meBioErasing,
         cam: { ...cam },
         baseCam: { ...baseCam },
         targetCam: { ...targetCam },
@@ -8830,8 +10754,55 @@
         lastExpTextLineBoxes: lastExpTextLineBoxes.slice(),
         lastMeProjectsScreenBoxes: lastMeProjectsScreenBoxes.slice(),
         lastBioHighlightLogs: lastBioHighlightLogs.slice(),
+        hasChalkPatterns: Boolean(chalkPatternPrimary && chalkPatternActive && chalkPatternMuted),
+        chalkPatternTileStats: {
+          primaryPores: chalkPatternTiles.primary ? chalkPatternTiles.primary.poreCount : 0,
+          primaryGrains: chalkPatternTiles.primary ? chalkPatternTiles.primary.grainCount : 0,
+          activePores: chalkPatternTiles.active ? chalkPatternTiles.active.poreCount : 0,
+          mutedPores: chalkPatternTiles.muted ? chalkPatternTiles.muted.poreCount : 0
+        },
+        frameChalkPatternCalls,
+        totalChalkPatternCalls,
+        projectHalftoneCardIds: Object.keys(projectPhotoCards),
+        projectPhotoHover: { ...projectPhotoHover },
+        projectPhotoLoadState: Object.fromEntries(
+          Object.entries(projectPhotoLoadState).map(([k, st]) => [
+            k,
+            {
+              urls: st.urls ? st.urls.slice() : [],
+              attemptIdx: st.attemptIdx,
+              useCors: st.useCors,
+              crossOrigin: st.crossOrigin,
+              status: st.status,
+              loadedUrl: st.loadedUrl
+            }
+          ])
+        ),
+        projectHalftoneStats: Object.fromEntries(
+          Object.entries(projectPhotoCards).map(([k, v]) => [
+            k,
+            {
+              bufW: v.bufW,
+              bufH: v.bufH,
+              hasHalftoneCanvas: Boolean(v.halftoneCanvas),
+              hasColorCanvas: Boolean(v.colorCanvas),
+              halftoneSize: v.halftoneCanvas ? `${v.halftoneCanvas.width}x${v.halftoneCanvas.height}` : null,
+              colorSize: v.colorCanvas ? `${v.colorCanvas.width}x${v.colorCanvas.height}` : null,
+              pitch: v.pitch,
+              dotCount: v.dotCount,
+              colorSampleRgb: v.colorSampleRgb,
+              tapeCount: v.tapeCount,
+              tiltRad: v.tiltRad,
+              isRealPhoto: Boolean(v.isRealPhoto),
+              loadedUrl: v.loadedUrl || null,
+              rebuildCount: v.rebuildCount || 1,
+              photoUrls: v.photoUrls ? v.photoUrls.slice() : []
+            }
+          ])
+        ),
         lastMeFilterScreenBoxes: lastMeFilterScreenBoxes.slice(),
         lastMeProjectSubBoxes: lastMeProjectSubBoxes.slice(),
+        lastMeProjectPhotoBoxes: lastMeProjectPhotoBoxes.slice(),
         lastMeProjectActionBoxes: lastMeProjectActionBoxes.slice(),
         lastTriggeredAction: lastTriggeredAction ? { ...lastTriggeredAction } : null
       };
@@ -8860,15 +10831,38 @@
     },
     openBranch(key) {
       resetPanOffset();
-      activeBranch = key === "projects" ? "me" : key;
-      activeItem = null;
-      syncCameraToActiveState(false);
+      transitionToBranch(key);
     },
     openItem(branchKey, itemId) {
       resetPanOffset();
-      activeBranch = branchKey === "projects" ? "me" : branchKey;
+      const targetKey = branchKey === "projects" ? "me" : branchKey;
+      if (activeBranch !== targetKey) {
+        transitionToBranch(targetKey);
+      }
+      expandedItems.clear();
+      if (itemId) {
+        expandedItems.add(itemId);
+        closingItems.delete(itemId);
+      }
       activeItem = itemId;
+      if (targetKey === "experience") {
+        activeExpYear = itemId;
+        closingExpYear = null;
+      }
       syncCameraToActiveState(false);
+    },
+    collapseSubItemSmoothly,
+    buildProjectHalftoneCard,
+    loadRealProjectPhotos,
+    upgradeProjectCardFromLoadedImage,
+    getProjectPhotoCard(id) {
+      return projectPhotoCards[id] || null;
+    },
+    getProjectPhotoLoadState(id) {
+      return projectPhotoLoadState[id] || null;
+    },
+    getProjectHalftoneCard(id) {
+      return projectPhotoCards[id] || null;
     },
     stepBack: stepBackOneLevel,
     setPlaylistOpen,
@@ -8937,10 +10931,13 @@
 
   // Boot
   syncCanvasFontVars();
+  initChalkTextPatterns();
   handleResize();
   initViewportGrain();
   buildBotanicalBuffers();
   initMePortraitBuffer();
+  initProjectHalftoneCards();
+  loadRealProjectPhotos();
   buildWorldProps();
   discoverLocalMusicFiles();
   syncMusicUI();
