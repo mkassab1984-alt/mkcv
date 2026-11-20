@@ -1,7 +1,7 @@
 window.SITE_DATA = {
   "en": {
     "dir": "ltr",
-    "pageTitle": "mamdouh kassab ismail — senior bilingual content writer, marketing consultant & creative director",
+    "pageTitle": "Mamdouh Kassab Ismail — senior bilingual content writer, marketing consultant & creative director",
     "langBtn": "عربي",
     "backLabel": "↩",
     "collapseNote": "← fold branch",
