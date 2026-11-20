@@ -1,12 +1,12 @@
 window.SITE_DATA = {
   "en": {
     "dir": "ltr",
-    "pageTitle": "Mamdouh Kassab Ismail — senior bilingual content writer, marketing consultant & creative director",
+    "pageTitle": "mamdouh kassab ismail — senior bilingual content writer, marketing consultant & creative director",
     "langBtn": "عربي",
     "backLabel": "↩",
     "collapseNote": "← fold branch",
     "readMore": "branch out →",
-    "musicNote": "maybe you'll know me better<br />if you listen to what I like!",
+    "musicNote": "maybe you'll know me better<br />if you listen to what i like!",
     "playlistTitle": "music playlist · 5 tracks",
     "emptyCapsuleLabel": "—",
     "emptyDrawerHint": "no tracks yet",
@@ -15,13 +15,13 @@ window.SITE_DATA = {
     "sequentialLabel": "sequential",
     "copiedPrefix": "copied",
     "identity": {
-      "name": "Mamdouh Kassab Ismail",
+      "name": "mamdouh kassab ismail",
       "role": "senior bilingual content writer, marketing consultant & creative director",
-      "location": "Jeddah, Saudi Arabia",
+      "location": "jeddah, saudi arabia",
       "phone": "+966 56 332 1033",
       "email": "mkassab1984@gmail.com",
       "experience": "15+ years of content & creative experience",
-      "languages": "languages: Arabic & English — professional writing, translation and localization"
+      "languages": "languages: arabic & english — professional writing, translation and localization"
     },
     "playlist": [
       {

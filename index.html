@@ -35,24 +35,20 @@
     <link rel="stylesheet" href="./tree/css/style.css" />
   </head>
   <body>
-    <!-- Hidden SVG Hand-Printed Letterpress & Canvas Ink Roughening Filters -->
+    <!-- Hidden SVG Hand-Printed Letterpress Filter (desktop static UI pills only; NEVER applied to #sheet or mobile touch layers) -->
     <svg width="0" height="0" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none">
       <defs>
         <filter id="ink-roughen" x="-5%" y="-5%" width="110%" height="110%">
           <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="7" result="n" />
           <feDisplacementMap in="SourceGraphic" in2="n" scale="1.45" xChannelSelector="R" yChannelSelector="G" />
         </filter>
-        <filter id="canvas-ink-roughen" x="-2%" y="-2%" width="104%" height="104%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="3" seed="11" result="n" />
-          <feDisplacementMap in="SourceGraphic" in2="n" scale="1.15" xChannelSelector="R" yChannelSelector="G" />
-        </filter>
       </defs>
     </svg>
 
-    <!-- 100% world-space physical branching canvas (zero HTML modals or popups) -->
+    <!-- 100% world-space physical branching canvas (zero HTML modals or popups, zero SVG filters) -->
     <canvas
       id="sheet"
-      aria-label="Mamdouh Kassab Ismail: work with me, experience, writing, me"
+      aria-label="mamdouh kassab ismail: work with me, experience, writing, me"
     ></canvas>
 
     <!-- Fixed full-viewport Vintage Mitered Shadow-Box Frame (z-index: 9990, right beneath #film-grain) -->
@@ -70,7 +66,7 @@
       </svg>
     </div>
 
-    <!-- Full-viewport top-layer monochromatic risograph/lithograph grain overlay (z-index: 9999) -->
+    <!-- Full-viewport top-layer static 128x128 monochromatic risograph/lithograph grain overlay (z-index: 9999) -->
     <div id="film-grain" class="film-grain" aria-hidden="true"></div>
 
     <!-- Bottom-left botanical back button (68x38, hidden at Home root) -->
@@ -121,7 +117,7 @@
           />
         </svg>
         <div class="music-note-text" id="music-note-text">
-          Maybe you'll know me better<br />if you listen to what I like!
+          maybe you'll know me better<br />if you listen to what i like!
         </div>
       </div>
 

@@ -155,20 +155,26 @@
   const projectPhotoCards = {};
   const projectHalftoneCards = projectPhotoCards;
   const projectPhotoHover = {};
+  const projectPhotoTouchReveal = {};
   const projectPhotoLift = {};
   const projectPhotoLoadState = {};
   let lastMeProjectPhotoBoxes = [];
 
-  // Viewport & Choreographed Spring Camera
-  let vw = window.innerWidth;
-  let vh = window.innerHeight;
+  // Viewport & Choreographed Spring Camera (DPR capped <= 2 for 60/120fps Retina mobile fill-rate)
+  let vw = Math.max(1, Math.round(window.innerWidth || 390));
+  let vh = Math.max(1, Math.round(window.innerHeight || 844));
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let isBootReady = false;
 
   const cam = { x: 0, y: -300, zoom: 1 };
   const baseCam = { x: 0, y: -300, zoom: 1 };
   const targetCam = { x: 0, y: -300, zoom: 1 };
-  const defaultTargetCam = { x: 0, y: -300, zoom: 1 };
-  const panOffset = { x: 0, y: 0 };
+  const baseTargetCam = { x: 0, y: -300, zoom: 1 };
+  const defaultTargetCam = baseTargetCam;
+  const userPan = { x: 0, y: 0 };
+  const panOffset = userPan;
+  const panVelocity = { x: 0, y: 0 };
+  let userZoomMul = 1.0;
 
   // Procedural offscreen assets, growth-order stipple buffers & world props
   let treeBuffer = null;
@@ -178,8 +184,14 @@
   let treeFinalRGBA = null;
   let treeGrowAt = null;
   let treeGrowBuckets = null;
+  let treeRowHasInk = null;
+  let treeRowMinGrow = null;
+  const treeSliceMetaCache = {};
+  let lastTreeSliceCount = 0;
+  let lastTreeDrawCalls = 0;
   let lastAnimBucket = -1;
   let treeGrainStats = null;
+  const wrapLinesCache = new Map();
 
   let grainTileCanvas = null;
   let grainPattern = null;
@@ -539,33 +551,38 @@
 
   function drawChalkText(str, x, y, fillColor, fontSizePx, alphaMul) {
     if (!str) return "";
-    const fs = Number.isFinite(fontSizePx) && fontSizePx > 0 ? fontSizePx : parseFontSizePx(ctx.font);
+    const fontSize = Number.isFinite(fontSizePx) && fontSizePx > 0 ? fontSizePx : parseFontSizePx(ctx.font);
+    const mappedChalkPattern = resolveChalkFillStyle(fillColor);
     ctx.save();
     if (alphaMul !== undefined && alphaMul < 0.999) {
       ctx.globalAlpha *= clamp(alphaMul, 0, 1);
     }
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.miterLimit = 2;
-    ctx.lineWidth = Math.max(1.25, fs * 0.09);
-    ctx.strokeStyle = "rgba(9, 11, 16, 0.84)";
-    ctx.shadowColor = "rgba(6, 8, 12, 0.88)";
-    ctx.shadowBlur = 0.9;
-    ctx.shadowOffsetX = 0.85;
-    ctx.shadowOffsetY = 1.25;
-    ctx.strokeText(str, x, y);
-
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-    ctx.fillStyle = resolveChalkFillStyle(fillColor);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.miterLimit = 2;
+
+    // 1) Fast zero-blur GPU glyph-atlas letterpress offset relief pass
+    ctx.strokeStyle = "rgba(5, 7, 11, 0.72)";
+    ctx.lineWidth = Math.max(1.2, fontSize * 0.085);
+    ctx.strokeText(str, x + 0.85, y + 1.25);
+
+    // 2) Crisp ink rim pass
+    ctx.strokeStyle = "rgba(9, 11, 16, 0.86)";
+    ctx.lineWidth = Math.max(1.25, fontSize * 0.09);
+    ctx.strokeText(str, x, y);
+
+    // 3) Pre-baked 128x128 stippled chalk interior pass
+    ctx.fillStyle = mappedChalkPattern;
     ctx.fillText(str, x, y);
     ctx.restore();
 
-    frameStrokeTextCalls++;
+    frameStrokeTextCalls += 2;
     frameFillTextCalls++;
-    totalStrokeTextCalls++;
+    totalStrokeTextCalls += 2;
     totalFillTextCalls++;
     return str;
   }
@@ -768,15 +785,21 @@
   // Hand-inked 14x14 lithograph micro-emblems for Selected Projects
   function drawProjectMicroEmblem(kind, cx, cy, color, glowAlpha) {
     ctx.save();
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    if (glowAlpha && glowAlpha > 0.04) {
+      ctx.fillStyle = `rgba(223, 226, 232, ${(0.09 * clamp(glowAlpha, 0, 1)).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 7.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.strokeStyle = color || CHALK;
     ctx.fillStyle = color || CHALK;
-    ctx.lineWidth = 1.15;
+    ctx.lineWidth = 1.15 + (glowAlpha && glowAlpha > 0.04 ? 0.18 * clamp(glowAlpha, 0, 1) : 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    if (glowAlpha && glowAlpha > 0.04) {
-      ctx.shadowColor = "rgba(223, 226, 232, 0.52)";
-      ctx.shadowBlur = 3.5 * glowAlpha;
-    }
 
     if (kind === "crest") {
       ctx.beginPath();
@@ -982,32 +1005,46 @@
     });
 
     ctx.save();
-    ctx.strokeStyle = color || CHALK_BRIGHT;
-    ctx.lineWidth = Math.min(1.25, lineWidth || 1.15);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(6, 8, 12, 0.86)";
-    ctx.shadowBlur = 1.5;
-    ctx.shadowOffsetY = 1.0;
-    ctx.beginPath();
+    const lw = Math.min(1.25, lineWidth || 1.15);
     const step = 3.5;
-    let dx = 0;
-    let first = true;
-    while (dx <= span) {
-      const wx = rtlDir ? xRight - dx : xLeft + dx;
-      const wy =
-        y +
-        Math.sin(dx * 0.21 + seed) * 0.44 +
-        Math.cos(dx * 0.47 + seed * 1.63) * 0.20;
-      if (first) {
-        ctx.moveTo(wx, wy);
-        first = false;
-      } else {
-        ctx.lineTo(wx, wy);
+
+    const traceWave = (yOff) => {
+      ctx.beginPath();
+      let dx = 0;
+      let first = true;
+      while (dx <= span) {
+        const wx = rtlDir ? xRight - dx : xLeft + dx;
+        const wy =
+          y +
+          yOff +
+          Math.sin(dx * 0.21 + seed) * 0.44 +
+          Math.cos(dx * 0.47 + seed * 1.63) * 0.20;
+        if (first) {
+          ctx.moveTo(wx, wy);
+          first = false;
+        } else {
+          ctx.lineTo(wx, wy);
+        }
+        if (dx === span) break;
+        dx = Math.min(span, dx + step);
       }
-      if (dx === span) break;
-      dx = Math.min(span, dx + step);
-    }
+    };
+
+    // Zero-blur crisp letterpress relief pass + chalk wave pass
+    ctx.strokeStyle = "rgba(5, 7, 11, 0.78)";
+    ctx.lineWidth = lw;
+    traceWave(1.0);
+    ctx.stroke();
+
+    ctx.strokeStyle = color || CHALK_BRIGHT;
+    ctx.lineWidth = lw;
+    traceWave(0);
     ctx.stroke();
     ctx.restore();
   }
@@ -1060,8 +1097,11 @@
   }
 
   function resetPanOffset() {
-    panOffset.x = 0;
-    panOffset.y = 0;
+    userPan.x = 0;
+    userPan.y = 0;
+    panVelocity.x = 0;
+    panVelocity.y = 0;
+    userZoomMul = 1.0;
   }
 
   function computeHomeWorldBounds() {
@@ -1169,6 +1209,10 @@
 
   function wrapLines(text, maxWidth, fontSpec) {
     if (!text) return [];
+    const cacheKey = `${fontSpec}|${Math.round(maxWidth * 2)}|${text}`;
+    const hit = wrapLinesCache.get(cacheKey);
+    if (hit) return hit;
+
     resetCanvasLetterSpacing();
     ctx.font = fontSpec;
     const words = text.split(/\s+/);
@@ -1185,6 +1229,8 @@
       }
     }
     if (cur) lines.push(cur);
+    if (wrapLinesCache.size > 2400) wrapLinesCache.clear();
+    wrapLinesCache.set(cacheKey, lines);
     return lines;
   }
 
@@ -1925,7 +1971,9 @@
       if (activeItem) {
         const mp = meLay.measuredProjects.find((p) => p.item.id === activeItem);
         if (mp) {
+          minX = Math.min(minX, mp.lvl2BoxLeft - 28);
           maxX = Math.max(maxX, mp.lvl2BoxRight + 28);
+          minY = Math.min(minY, mp.lvl2TopY - 28);
           maxY = Math.max(maxY, mp.lvl2TopY + mp.detailH + 44);
         }
       }
@@ -1949,10 +1997,22 @@
   }
 
   function recordDefaultTargetAndApplyInstant(instant, isHome) {
-    defaultTargetCam.x = targetCam.x;
-    defaultTargetCam.y = targetCam.y;
-    defaultTargetCam.zoom = targetCam.zoom;
-    if (instant) {
+    baseTargetCam.x = targetCam.x;
+    baseTargetCam.y = targetCam.y;
+    baseTargetCam.zoom = targetCam.zoom;
+    targetCam.zoom = clamp(baseTargetCam.zoom * userZoomMul, 0.30, 2.2);
+
+    const lim = computeClampedCameraLimits();
+    userPan.x = clamp(userPan.x, lim.minX - baseTargetCam.x, lim.maxX - baseTargetCam.x);
+    userPan.y = clamp(userPan.y, lim.minY - baseTargetCam.y, lim.maxY - baseTargetCam.y);
+    targetCam.x = baseTargetCam.x + userPan.x;
+    targetCam.y = baseTargetCam.y + userPan.y;
+
+    if (instant || isAnyDragActive()) {
+      if (instant) {
+        panVelocity.x = 0;
+        panVelocity.y = 0;
+      }
       baseCam.x = targetCam.x;
       baseCam.y = targetCam.y;
       baseCam.zoom = targetCam.zoom;
@@ -2477,10 +2537,10 @@
     };
   }
 
-  // Generate 256x256 top-layer viewport grain + 128x128 high-DPI capsule stipple grain tile
+  // Generate lightweight static 128x128 RGBA viewport grain + 128x128 high-DPI capsule stipple grain tile
   function initViewportGrain() {
     if (typeof document === "undefined") return;
-    const TILE = 256;
+    const TILE = 128;
     const tile = document.createElement("canvas");
     tile.width = TILE;
     tile.height = TILE;
@@ -2494,13 +2554,24 @@
         const px = img.data;
         const prng = mulberry32(9021077);
         for (let i = 0; i < TILE * TILE; i++) {
-          const sp = (prng() - 0.5) * 184;
-          const v = clamp(Math.round(128 + sp), 0, 255);
+          const sp = prng() - 0.5;
           const o = i * 4;
-          px[o] = v;
-          px[o + 1] = v;
-          px[o + 2] = v;
-          px[o + 3] = 255;
+          if (sp < -0.06) {
+            px[o] = 10;
+            px[o + 1] = 12;
+            px[o + 2] = 18;
+            px[o + 3] = clamp(Math.round((-sp) * 235), 0, 130);
+          } else if (sp > 0.06) {
+            px[o] = 216;
+            px[o + 1] = 220;
+            px[o + 2] = 228;
+            px[o + 3] = clamp(Math.round(sp * 215), 0, 118);
+          } else {
+            px[o] = 0;
+            px[o + 1] = 0;
+            px[o + 2] = 0;
+            px[o + 3] = 0;
+          }
         }
         try {
           tg.putImageData(img, 0, 0);
@@ -2517,6 +2588,7 @@
             const uri = tile.toDataURL("image/png");
             if (uri && uri.indexOf("data:image/") === 0) {
               filmGrainEl.style.backgroundImage = `url("${uri}")`;
+              filmGrainEl.style.backgroundSize = "128px 128px";
               filmGrainAppliedToDom = true;
             }
           } catch (_) {}
@@ -2949,6 +3021,27 @@
           const bIdx = Math.min(255, Math.floor(gVal * 255));
           treeGrowBuckets[bIdx].push(pIdx);
         }
+      }
+
+      treeRowHasInk = new Uint8Array(H);
+      treeRowMinGrow = new Float32Array(H);
+      for (let y = 0; y < H; y++) {
+        let rowInk = 0;
+        let minG = 2.0;
+        const rowOff = y * W;
+        for (let x = 0; x < W; x++) {
+          const pIdx = rowOff + x;
+          if (treeFinalRGBA[pIdx * 4 + 3] > 0) {
+            rowInk = 1;
+            const gv = treeGrowAt[pIdx];
+            if (gv < minG) minG = gv;
+          }
+        }
+        treeRowHasInk[y] = rowInk;
+        treeRowMinGrow[y] = minG;
+      }
+      for (const k of Object.keys(treeSliceMetaCache)) {
+        delete treeSliceMetaCache[k];
       }
 
       treeAnimBuffer = document.createElement("canvas");
@@ -8141,37 +8234,83 @@
     return cur;
   }
 
+  function getTreeSliceMeta(slices, srcH) {
+    const key = `${slices}:${srcH}`;
+    if (treeSliceMetaCache[key]) return treeSliceMetaCache[key];
+    const meta = new Array(slices);
+    const sliceH = srcH / slices;
+    for (let i = 0; i < slices; i++) {
+      if (!treeRowHasInk || treeRowHasInk.length !== srcH) {
+        meta[i] = { hasInk: true, minGrow: 0 };
+        continue;
+      }
+      const y0 = clamp(Math.floor(i * sliceH), 0, srcH - 1);
+      const y1 = clamp(Math.ceil((i + 1) * sliceH + 1), 0, srcH);
+      let hasInk = false;
+      let minGrow = 2.0;
+      for (let y = y0; y < y1; y++) {
+        if (treeRowHasInk[y]) {
+          hasInk = true;
+          if (treeRowMinGrow[y] < minGrow) minGrow = treeRowMinGrow[y];
+        }
+      }
+      meta[i] = { hasInk, minGrow };
+    }
+    treeSliceMetaCache[key] = meta;
+    return meta;
+  }
+
   function renderTree(timeSec) {
     if (!treeBuffer) return;
+    lastTreeDrawCalls = 0;
+    const slices = vw < 680 ? 14 : 30;
+    lastTreeSliceCount = slices;
 
-    if (introTreeProgress > 0.001) {
+    const z = Math.max(0.2, cam.zoom || 1);
+    const viewLeft = cam.x - (vw * 0.5) / z - 18;
+    const viewRight = cam.x + (vw * 0.5) / z + 18;
+    const viewTop = cam.y - (vh * 0.5) / z - 12;
+    const viewBot = cam.y + (vh * 0.5) / z + 12;
+
+    if (introTreeProgress > 0.001 && TREE_W * 0.5 >= viewLeft && -TREE_W * 0.5 <= viewRight) {
       let activeSrc = treeBuffer;
       if (introTreeProgress < 0.999 && treeAnimBuffer) {
         updateTreeAnimBuffer(introTreeProgress);
         activeSrc = treeAnimBuffer;
       }
 
-      // True 1:1 proportions (ZERO scaleX/scaleY stretching, ZERO scalloped clip, ZERO square confetti motes!)
-      const slices = 40;
+      // True 1:1 proportions: 14 slices on mobile (vw < 680) vs 30 on desktop, skipping empty & off-viewport slices!
       const srcSliceH = activeSrc.height / slices;
       const dstSliceH = TREE_BUF_H / slices;
+      const sliceMeta = getTreeSliceMeta(slices, activeSrc.height);
 
       ctx.save();
       for (let i = 0; i < slices; i++) {
+        const sm = sliceMeta[i];
+        if (!sm.hasInk) continue;
+        if (introTreeProgress < 0.999 && sm.minGrow > introTreeProgress) continue;
+
         const wyTop = -TREE_H + i * dstSliceH;
+        if (wyTop + dstSliceH < viewTop || wyTop > viewBot) continue;
+
+        const sy = i * srcSliceH;
+        const sh = Math.min(srcSliceH + 1, activeSrc.height - sy);
+        if (sh <= 0) continue;
+
         const wyMid = wyTop + dstSliceH * 0.5;
         const sway = computeCanopySway(wyMid, timeSec);
         ctx.drawImage(
           activeSrc,
           0,
-          i * srcSliceH,
+          sy,
           activeSrc.width,
-          srcSliceH + 1,
+          sh,
           -TREE_W * 0.5 + sway,
           wyTop,
           TREE_W,
           dstSliceH + 0.48
         );
+        lastTreeDrawCalls++;
       }
       ctx.restore();
     }
@@ -8210,13 +8349,53 @@
     const rootsRaw = clamp(introElapsed / 1.23, 0, 1);
     rootsGrow = easeOutCubic(rootsRaw);
 
-    // 2. Smooth, poised camera glide (damping 3.9 -> +11% speed; direct drag stays 0ms instant)
+    // 2. Smooth, poised camera glide (damping 3.9 -> +11% speed; direct drag is locked 1:1; flick release coasts via iOS inertia)
     const camEase = 1 - Math.exp(-3.9 * dt);
-    const goalX = targetCam.x + panOffset.x;
-    const goalY = targetCam.y + panOffset.y;
-    baseCam.x += (goalX - baseCam.x) * camEase;
-    baseCam.y += (goalY - baseCam.y) * camEase;
-    baseCam.zoom += (targetCam.zoom - baseCam.zoom) * camEase;
+    if (isAnyDragActive()) {
+      baseCam.x = targetCam.x;
+      baseCam.y = targetCam.y;
+      baseCam.zoom = targetCam.zoom;
+    } else {
+      const flickSpeed = Math.hypot(panVelocity.x, panVelocity.y);
+      if (flickSpeed >= 4 && dt > 0) {
+        const lim = computeClampedCameraLimits();
+        const prevGoalX = baseTargetCam.x + userPan.x;
+        const prevGoalY = baseTargetCam.y + userPan.y;
+        const nextX = clamp(prevGoalX + panVelocity.x * dt, lim.minX, lim.maxX);
+        const nextY = clamp(prevGoalY + panVelocity.y * dt, lim.minY, lim.maxY);
+
+        if (Math.abs(panVelocity.x) > 0.5 && Math.abs(nextX - prevGoalX) < Math.abs(panVelocity.x * dt) * 0.2) {
+          panVelocity.x = 0;
+        }
+        if (Math.abs(panVelocity.y) > 0.5 && Math.abs(nextY - prevGoalY) < Math.abs(panVelocity.y * dt) * 0.2) {
+          panVelocity.y = 0;
+        }
+
+        userPan.x = nextX - baseTargetCam.x;
+        userPan.y = nextY - baseTargetCam.y;
+        targetCam.x = nextX;
+        targetCam.y = nextY;
+        baseCam.x = nextX;
+        baseCam.y = nextY;
+        baseCam.zoom += (targetCam.zoom - baseCam.zoom) * camEase;
+
+        const decay = Math.exp(-4.8 * dt);
+        panVelocity.x *= decay;
+        panVelocity.y *= decay;
+        if (Math.hypot(panVelocity.x, panVelocity.y) < 4) {
+          panVelocity.x = 0;
+          panVelocity.y = 0;
+        }
+      } else {
+        panVelocity.x = 0;
+        panVelocity.y = 0;
+        targetCam.x = baseTargetCam.x + userPan.x;
+        targetCam.y = baseTargetCam.y + userPan.y;
+        baseCam.x += (targetCam.x - baseCam.x) * camEase;
+        baseCam.y += (targetCam.y - baseCam.y) * camEase;
+        baseCam.zoom += (targetCam.zoom - baseCam.zoom) * camEase;
+      }
+    }
 
     if (!activeBranch && !hasOpenedAnyBranch) {
       const camGlideP = easeOutCubic(clamp(introElapsed / 1.41, 0, 1));
@@ -8245,10 +8424,13 @@
       identityType = approach(identityType, idGoal, 1 / 0.89, 1 / 0.345, dt);
     }
 
-    // 4. Portrait & Project Photo hover interpolation
+    // 4. Portrait & Project Photo hover / touch color-reveal interpolation
     if (activeBranch !== "me") {
       isPortraitHovered = false;
       portraitTouchToggled = false;
+      for (const k of Object.keys(projectPhotoTouchReveal)) {
+        projectPhotoTouchReveal[k] = false;
+      }
     } else if (lastPointerScreen.active && !portraitTouchToggled && portraitBounds) {
       isPortraitHovered = hitTestPortrait(lastPointerScreen.x, lastPointerScreen.y);
     }
@@ -8264,7 +8446,8 @@
         activeBranch === "me" &&
         hoveredHit &&
         (hoveredHit.id === "proj-photo:" + pid || hoveredHit.id === "item:" + pid);
-      const targetPHov = isProjHov ? 1 : 0;
+      const isTouchRev = activeBranch === "me" && Boolean(projectPhotoTouchReveal[pid]);
+      const targetPHov = isProjHov || isTouchRev ? 1 : 0;
       const prevPHov = projectPhotoHover[pid] || 0;
       let nextPHov = prevPHov + (targetPHov - prevPHov) * photoHoverEase;
       if (nextPHov < 0.001 && targetPHov === 0) nextPHov = 0;
@@ -8513,6 +8696,10 @@
 
     stepAnimations(dt);
 
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const treeScreen = worldToScreen(0, -320);
     const skyGrad = ctx.createRadialGradient(
@@ -8768,13 +8955,15 @@
   }
 
   function computeClampedCameraLimits() {
-    const z = Math.max(0.28, targetCam.zoom || cam.zoom || 1);
+    const z = Math.max(0.28, targetCam.zoom || baseTargetCam.zoom || cam.zoom || 1);
+    const panMarginX = Math.max(260, (vw * 0.58) / z);
+    const panMarginY = Math.max(420, (vh * 0.62) / z);
     if (!activeBranch) {
       return {
-        minX: defaultTargetCam.x - 180,
-        maxX: defaultTargetCam.x + 180,
-        minY: defaultTargetCam.y - 140,
-        maxY: defaultTargetCam.y + 140
+        minX: baseTargetCam.x - panMarginX,
+        maxX: baseTargetCam.x + panMarginX,
+        minY: baseTargetCam.y - panMarginY,
+        maxY: baseTargetCam.y + panMarginY
       };
     }
     const bounds = computeActiveContentBounds();
@@ -8784,38 +8973,57 @@
     const padTopW = 56 / z;
     const padBotW = 84 / z;
 
-    const minX = Math.min(defaultTargetCam.x - 80, bounds.minX - padSideW + halfVW);
-    const maxX = Math.max(defaultTargetCam.x + 80, bounds.maxX + padSideW - halfVW);
-    const minY = Math.min(defaultTargetCam.y - 40, bounds.minY - padTopW + halfVH);
-    const maxY = Math.max(defaultTargetCam.y + 40, bounds.maxY + padBotW - halfVH);
+    const minX = Math.min(baseTargetCam.x - panMarginX * 0.65, bounds.minX - padSideW + halfVW);
+    const maxX = Math.max(baseTargetCam.x + panMarginX * 0.65, bounds.maxX + padSideW - halfVW);
+    const minY = Math.min(baseTargetCam.y - panMarginY * 0.45, bounds.minY - padTopW + halfVH);
+    const maxY = Math.max(baseTargetCam.y + panMarginY, bounds.maxY + padBotW - halfVH);
     return { minX, maxX, minY, maxY };
   }
 
-  // Smooth wheel scrolling: pans targetCam.y (and targetCam.x) within clamped content bounds whenever any branch is open!
+  // Smooth wheel scrolling: updates userPan & targetCam cleanly within clamped content bounds
   function applyWheelDelta(deltaX, deltaY, deltaMode) {
     if (!activeBranch) return false;
+    panVelocity.x = 0;
+    panVelocity.y = 0;
     const modeScale = deltaMode === 1 ? 32 : deltaMode === 2 ? vh * 0.85 : 1;
     const dxPx = (deltaX || 0) * modeScale;
     const dyPx = (deltaY || 0) * modeScale;
     const z = Math.max(0.28, targetCam.zoom || cam.zoom || 1);
     const lim = computeClampedCameraLimits();
 
-    targetCam.x = clamp(targetCam.x + (dxPx / z) * 0.85, lim.minX - panOffset.x, lim.maxX - panOffset.x);
-    targetCam.y = clamp(targetCam.y + (dyPx / z) * 0.85, lim.minY - panOffset.y, lim.maxY - panOffset.y);
+    const nextX = clamp(baseTargetCam.x + userPan.x + (dxPx / z) * 0.85, lim.minX, lim.maxX);
+    const nextY = clamp(baseTargetCam.y + userPan.y + (dyPx / z) * 0.85, lim.minY, lim.maxY);
+    userPan.x = nextX - baseTargetCam.x;
+    userPan.y = nextY - baseTargetCam.y;
+    targetCam.x = nextX;
+    targetCam.y = nextY;
     return true;
   }
 
+  function anchorCamForDirectManipulation() {
+    panVelocity.x = 0;
+    panVelocity.y = 0;
+    userPan.x = cam.x - baseTargetCam.x;
+    userPan.y = cam.y - baseTargetCam.y;
+    targetCam.x = cam.x;
+    targetCam.y = cam.y;
+    baseCam.x = cam.x;
+    baseCam.y = cam.y;
+  }
+
   function applyPanDeltaScreen(dxScreen, dyScreen) {
-    const z = Math.max(0.25, cam.zoom || 1);
+    const z = Math.max(0.25, cam.zoom || targetCam.zoom || 1);
     const lim = computeClampedCameraLimits();
-    const nextGoalX = clamp(targetCam.x + panOffset.x - dxScreen / z, lim.minX, lim.maxX);
-    const nextGoalY = clamp(targetCam.y + panOffset.y - dyScreen / z, lim.minY, lim.maxY);
-    panOffset.x = nextGoalX - targetCam.x;
-    panOffset.y = nextGoalY - targetCam.y;
-    baseCam.x = nextGoalX;
-    baseCam.y = nextGoalY;
-    cam.x = baseCam.x;
-    cam.y = baseCam.y;
+    const nextX = clamp(cam.x - dxScreen / z, lim.minX, lim.maxX);
+    const nextY = clamp(cam.y - dyScreen / z, lim.minY, lim.maxY);
+    userPan.x = nextX - baseTargetCam.x;
+    userPan.y = nextY - baseTargetCam.y;
+    targetCam.x = nextX;
+    targetCam.y = nextY;
+    baseCam.x = nextX;
+    baseCam.y = nextY;
+    cam.x = nextX;
+    cam.y = nextY;
   }
 
   function collapseSubItemSmoothly(itemId) {
@@ -8887,7 +9095,9 @@
     return false;
   }
 
-  function handleWorldClick(sx, sy) {
+  function handleWorldClick(sx, sy, pointerType) {
+    const isTouchTap = pointerType === "touch";
+
     if (playlistOpen) {
       setPlaylistOpen(false);
       const hitWhileOpen = hitTestWorld(sx, sy);
@@ -8902,8 +9112,9 @@
         isPortraitHovered = portraitTouchToggled;
         return;
       }
-      if (Math.hypot(panOffset.x, panOffset.y) > 12) {
+      if (Math.hypot(userPan.x, userPan.y) > 12) {
         resetPanOffset();
+        syncCameraToActiveState(false);
         return;
       }
       stepBackOneLevel();
@@ -8930,6 +9141,11 @@
       expandedItems.add(hit.projectId);
       closingItems.delete(hit.projectId);
       activeItem = hit.projectId;
+      if (isTouchTap) {
+        for (const k of Object.keys(projectPhotoTouchReveal)) projectPhotoTouchReveal[k] = false;
+        projectPhotoTouchReveal[hit.projectId] = true;
+        projectPhotoHover[hit.projectId] = Math.max(projectPhotoHover[hit.projectId] || 0, 0.22);
+      }
       syncCameraToActiveState(false);
       return;
     }
@@ -8950,8 +9166,8 @@
         const lay = computeBranchLayout(bCfg);
         const meLay = computeMeEditorialLayout(bCfg, lay);
         const z = Math.max(0.35, targetCam.zoom || cam.zoom || 1);
-        targetCam.y = (meLay.projectsHeadingY - 24) - (68 - vh * 0.5) / z;
-        defaultTargetCam.y = targetCam.y;
+        baseTargetCam.y = (meLay.projectsHeadingY - 24) - (68 - vh * 0.5) / z;
+        targetCam.y = baseTargetCam.y;
       }
       return;
     }
@@ -8961,7 +9177,8 @@
       lastTriggeredAction = {
         ...(hit.action || {}),
         resolvedUrl: targetUrl || null,
-        itemId: hit.itemId || null
+        itemId: hit.itemId || null,
+        count: ((lastTriggeredAction && lastTriggeredAction.count) || 0) + 1
       };
       if (hit.action.copy) {
         copyToClipboard(hit.action.copy);
@@ -8996,12 +9213,36 @@
       const isAlreadyOpen =
         (activeItem === hit.itemId && closingExpYear !== hit.itemId) ||
         expandedItems.has(hit.itemId);
+
+      // On touch devices, tapping a project's taped halftone photo reveals its full-color Wikimedia photo!
+      if (isTouchTap && hit.branchKey === "me") {
+        if (!isAlreadyOpen) {
+          for (const k of Object.keys(projectPhotoTouchReveal)) projectPhotoTouchReveal[k] = false;
+          projectPhotoTouchReveal[hit.itemId] = true;
+          projectPhotoHover[hit.itemId] = Math.max(projectPhotoHover[hit.itemId] || 0, 0.24);
+        } else if (hit.kind === "project-photo" && !projectPhotoTouchReveal[hit.itemId]) {
+          for (const k of Object.keys(projectPhotoTouchReveal)) projectPhotoTouchReveal[k] = false;
+          projectPhotoTouchReveal[hit.itemId] = true;
+          projectPhotoHover[hit.itemId] = Math.max(projectPhotoHover[hit.itemId] || 0, 0.24);
+          syncCameraToActiveState(false);
+          return;
+        } else {
+          projectPhotoTouchReveal[hit.itemId] = false;
+        }
+      }
+
       if (isAlreadyOpen) {
+        if (hit.branchKey === "me") {
+          projectPhotoTouchReveal[hit.itemId] = false;
+        }
         collapseSubItemSmoothly(hit.itemId);
       } else {
         if (activeItem && activeItem !== hit.itemId) {
           expandedItems.delete(activeItem);
           closingItems.add(activeItem);
+          if (hit.branchKey === "me") {
+            projectPhotoTouchReveal[activeItem] = false;
+          }
         }
         expandedItems.add(hit.itemId);
         closingItems.delete(hit.itemId);
@@ -9024,50 +9265,321 @@
     starCursorScreen.active = true;
   }
 
-  window.addEventListener(
-    "mousemove",
-    (e) => {
-      updateStarPointerFromScreen(e.clientX, e.clientY);
-    },
-    { passive: true }
-  );
+  // =========================================================================
+  // UNIFIED POINTER/TOUCH GESTURE ENGINE (1-Finger 1:1 Pan + iOS Flick Inertia
+  // + 2-Finger Pinch-Zoom + Zero Duplicate pointer* vs touch*/mouse*/click!)
+  // =========================================================================
+  const activePointers = new Map();
+  let lastPointerEventMs = -1e9;
+  let lastTouchEventMs = -1e9;
+  let pointerSequenceActive = false;
+  let suppressNativeClickUntil = -1e9;
+  let worldTapCount = 0;
 
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      updateStarPointerFromScreen(e.clientX, e.clientY);
-    },
-    { passive: true }
-  );
-
-  let recentTouchMs = 0;
-  const touchGesture = {
-    active: false,
-    id: null,
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-    isDragging: false
+  const gesture = {
+    isDragging: false,
+    everDragged: false,
+    hadMultiTouch: false,
+    pointerType: "mouse",
+    totalTravel: 0,
+    maxDistFromStart: 0,
+    velWorldX: 0,
+    velWorldY: 0,
+    hasVelSample: false,
+    lastMoveMs: 0,
+    pinchStartDist: 0,
+    pinchStartZoomMul: 1.0,
+    pinchLastMidX: 0,
+    pinchLastMidY: 0
   };
 
+  function isAnyDragActive() {
+    return Boolean(gesture.isDragging && activePointers.size > 0);
+  }
+
+  function eventTimeMs(e) {
+    const pNow = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+    if (e && Number.isFinite(e.timeStamp) && e.timeStamp > 0) {
+      return e.timeStamp;
+    }
+    return pNow;
+  }
+
+  function perfNowMs() {
+    return typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+  }
+
+  function initTwoFingerPinchState() {
+    const pts = Array.from(activePointers.values());
+    if (pts.length < 2) return;
+    const p0 = pts[0];
+    const p1 = pts[1];
+    gesture.hadMultiTouch = true;
+    gesture.everDragged = true;
+    gesture.isDragging = true;
+    gesture.velWorldX = 0;
+    gesture.velWorldY = 0;
+    gesture.hasVelSample = false;
+    gesture.pinchStartDist = Math.max(12, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+    gesture.pinchStartZoomMul = userZoomMul;
+    gesture.pinchLastMidX = (p0.x + p1.x) * 0.5;
+    gesture.pinchLastMidY = (p0.y + p1.y) * 0.5;
+    anchorCamForDirectManipulation();
+  }
+
+  function onUnifiedPointerDown(e, fallbackType) {
+    const pType = (e && e.pointerType) || fallbackType || "mouse";
+    if (pType === "mouse" && typeof e.button === "number" && e.button !== 0) return;
+
+    const pid = e && e.pointerId !== undefined ? e.pointerId : (pType === "touch" ? 1 : 0);
+    const cx = Number.isFinite(e.clientX) ? e.clientX : 0;
+    const cy = Number.isFinite(e.clientY) ? e.clientY : 0;
+    const tMs = eventTimeMs(e);
+
+    // Immediately catch & halt any ongoing kinetic flick scroll when finger touches down
+    panVelocity.x = 0;
+    panVelocity.y = 0;
+    updateStarPointerFromScreen(cx, cy);
+
+    if (canvas && typeof canvas.setPointerCapture === "function" && e && e.pointerId !== undefined) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+    }
+
+    activePointers.set(pid, {
+      id: pid,
+      pointerType: pType,
+      startX: cx,
+      startY: cy,
+      x: cx,
+      y: cy,
+      totalTravel: 0,
+      lastTimeMs: tMs
+    });
+
+    if (activePointers.size === 1) {
+      gesture.isDragging = false;
+      gesture.everDragged = false;
+      gesture.hadMultiTouch = false;
+      gesture.pointerType = pType;
+      gesture.totalTravel = 0;
+      gesture.maxDistFromStart = 0;
+      gesture.velWorldX = 0;
+      gesture.velWorldY = 0;
+      gesture.hasVelSample = false;
+      gesture.lastMoveMs = tMs;
+    } else if (activePointers.size >= 2) {
+      initTwoFingerPinchState();
+    }
+  }
+
+  function onUnifiedPointerMove(e, fallbackType) {
+    const pType = (e && e.pointerType) || fallbackType || "mouse";
+    const pid = e && e.pointerId !== undefined ? e.pointerId : (pType === "touch" ? 1 : 0);
+    const cx = Number.isFinite(e.clientX) ? e.clientX : 0;
+    const cy = Number.isFinite(e.clientY) ? e.clientY : 0;
+
+    updateStarPointerFromScreen(cx, cy);
+
+    if (!activePointers.has(pid)) {
+      if (pType !== "touch" && activePointers.size === 0) {
+        lastPointerScreen.x = cx;
+        lastPointerScreen.y = cy;
+        lastPointerScreen.active = true;
+        portraitTouchToggled = false;
+        isPortraitHovered = hitTestPortrait(cx, cy);
+        hoveredHit = hitTestWorld(cx, cy);
+        canvas.classList.toggle("is-pointer", Boolean(hoveredHit || isPortraitHovered));
+      }
+      return;
+    }
+
+    const p = activePointers.get(pid);
+    const tMs = eventTimeMs(e);
+    const dx = cx - p.x;
+    const dy = cy - p.y;
+    const stepDist = Math.hypot(dx, dy);
+    const rawDtSec = (tMs - p.lastTimeMs) * 0.001;
+
+    p.x = cx;
+    p.y = cy;
+    p.totalTravel += stepDist;
+    p.lastTimeMs = tMs;
+
+    if (activePointers.size >= 2) {
+      const pts = Array.from(activePointers.values());
+      const p0 = pts[0];
+      const p1 = pts[1];
+      const curDist = Math.max(12, Math.hypot(p1.x - p0.x, p1.y - p0.y));
+      const midX = (p0.x + p1.x) * 0.5;
+      const midY = (p0.y + p1.y) * 0.5;
+
+      userZoomMul = clamp(gesture.pinchStartZoomMul * (curDist / Math.max(12, gesture.pinchStartDist)), 0.65, 2.2);
+      targetCam.zoom = clamp(baseTargetCam.zoom * userZoomMul, 0.30, 2.2);
+      baseCam.zoom = targetCam.zoom;
+      cam.zoom = targetCam.zoom;
+
+      applyPanDeltaScreen(midX - gesture.pinchLastMidX, midY - gesture.pinchLastMidY);
+      gesture.pinchLastMidX = midX;
+      gesture.pinchLastMidY = midY;
+      return;
+    }
+
+    if (gesture.hadMultiTouch) return;
+
+    const distFromStart = Math.hypot(cx - p.startX, cy - p.startY);
+    gesture.maxDistFromStart = Math.max(gesture.maxDistFromStart, distFromStart);
+    gesture.totalTravel = Math.max(gesture.totalTravel, p.totalTravel, distFromStart);
+
+    // Clean tap vs pan threshold: < 8px on touch, < 5px on mouse
+    const dragThresh = p.pointerType === "touch" ? 8 : 5;
+    if (!gesture.isDragging && distFromStart >= dragThresh) {
+      gesture.isDragging = true;
+      gesture.everDragged = true;
+      anchorCamForDirectManipulation();
+    }
+
+    if (gesture.isDragging && (dx !== 0 || dy !== 0)) {
+      const z = Math.max(0.25, cam.zoom || targetCam.zoom || 1);
+      applyPanDeltaScreen(dx, dy);
+
+      // Exponentially smoothed world-space velocity (px/sec) for iOS kinetic flick inertia
+      const sampleDt = clamp(rawDtSec > 0.0005 ? rawDtSec : 0.016, 0.008, 0.08);
+      const instVelX = clamp((-dx / z) / sampleDt, -2600, 2600);
+      const instVelY = clamp((-dy / z) / sampleDt, -2600, 2600);
+      if (!gesture.hasVelSample) {
+        gesture.velWorldX = instVelX;
+        gesture.velWorldY = instVelY;
+        gesture.hasVelSample = true;
+      } else {
+        gesture.velWorldX = gesture.velWorldX * 0.35 + instVelX * 0.65;
+        gesture.velWorldY = gesture.velWorldY * 0.35 + instVelY * 0.65;
+      }
+      gesture.lastMoveMs = tMs;
+    }
+  }
+
+  function onUnifiedPointerUp(e, fallbackType, isCancel) {
+    const pType = (e && e.pointerType) || fallbackType || gesture.pointerType || "mouse";
+    const pid = e && e.pointerId !== undefined ? e.pointerId : (pType === "touch" ? 1 : 0);
+    const tracked = activePointers.get(pid);
+    const cx = Number.isFinite(e && e.clientX) ? e.clientX : (tracked ? tracked.x : 0);
+    const cy = Number.isFinite(e && e.clientY) ? e.clientY : (tracked ? tracked.y : 0);
+    const tMs = eventTimeMs(e);
+
+    if (canvas && typeof canvas.releasePointerCapture === "function" && e && e.pointerId !== undefined) {
+      try {
+        if (typeof canvas.hasPointerCapture !== "function" || canvas.hasPointerCapture(e.pointerId)) {
+          canvas.releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
+    }
+
+    if (tracked) {
+      const finalStep = Math.hypot(cx - tracked.x, cy - tracked.y);
+      const finalDist = Math.hypot(cx - tracked.startX, cy - tracked.startY);
+      gesture.maxDistFromStart = Math.max(gesture.maxDistFromStart, finalDist);
+      gesture.totalTravel = Math.max(gesture.totalTravel, tracked.totalTravel + finalStep, finalDist);
+      activePointers.delete(pid);
+    }
+
+    if (activePointers.size > 0) {
+      if (activePointers.size === 1) {
+        const rem = Array.from(activePointers.values())[0];
+        rem.startX = rem.x;
+        rem.startY = rem.y;
+        rem.lastTimeMs = tMs;
+      }
+      return;
+    }
+
+    const wasDrag = gesture.everDragged || gesture.isDragging || gesture.hadMultiTouch;
+    const totalTravel = gesture.totalTravel;
+    const tapMax = pType === "touch" ? 8 : 5;
+
+    gesture.isDragging = false;
+    pointerSequenceActive = false;
+    suppressNativeClickUntil = perfNowMs() + 550;
+
+    if (isCancel) {
+      panVelocity.x = 0;
+      panVelocity.y = 0;
+      return;
+    }
+
+    if (wasDrag) {
+      // Launch buttery iOS-style inertial flick coasting on release after drag > 6px!
+      if (!gesture.hadMultiTouch && totalTravel > 6 && gesture.hasVelSample) {
+        const idleSec = Math.max(0, (tMs - gesture.lastMoveMs) * 0.001);
+        const holdAtten = idleSec > 0.09 ? Math.exp(-18 * (idleSec - 0.09)) : 1.0;
+        const vx = gesture.velWorldX * holdAtten;
+        const vy = gesture.velWorldY * holdAtten;
+        if (Math.hypot(vx, vy) >= 4) {
+          panVelocity.x = vx;
+          panVelocity.y = vy;
+        }
+      }
+      return;
+    }
+
+    if (totalTravel < tapMax) {
+      worldTapCount++;
+      handleWorldClick(cx, cy, pType);
+    }
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e._treeHandled) return;
+    e._treeHandled = true;
+    lastPointerEventMs = perfNowMs();
+    pointerSequenceActive = true;
+    onUnifiedPointerDown(e, e.pointerType || "mouse");
+  });
+
+  const handlePointerMoveDedup = (e) => {
+    if (e._treeHandled) return;
+    e._treeHandled = true;
+    lastPointerEventMs = perfNowMs();
+    onUnifiedPointerMove(e, e.pointerType || "mouse");
+  };
+  canvas.addEventListener("pointermove", handlePointerMoveDedup, { passive: true });
+  window.addEventListener("pointermove", handlePointerMoveDedup, { passive: true });
+
+  const handlePointerUpDedup = (e) => {
+    if (e._treeHandled) return;
+    e._treeHandled = true;
+    lastPointerEventMs = perfNowMs();
+    onUnifiedPointerUp(e, e.pointerType || "mouse", false);
+  };
+  canvas.addEventListener("pointerup", handlePointerUpDedup);
+  window.addEventListener("pointerup", handlePointerUpDedup);
+
+  const handlePointerCancelDedup = (e) => {
+    if (e._treeHandled) return;
+    e._treeHandled = true;
+    lastPointerEventMs = perfNowMs();
+    onUnifiedPointerUp(e, e.pointerType || "mouse", true);
+  };
+  canvas.addEventListener("pointercancel", handlePointerCancelDedup);
+  window.addEventListener("pointercancel", handlePointerCancelDedup);
+
+  // Passive-false touch guards prevent iOS Safari rubber-band page scroll WITHOUT double-applying deltas!
   canvas.addEventListener(
     "touchstart",
     (e) => {
-      recentTouchMs = performance.now();
-      if (!e.touches || e.touches.length !== 1) {
-        touchGesture.active = false;
-        return;
+      if (e.cancelable && typeof e.preventDefault === "function") e.preventDefault();
+      if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000) return;
+      lastTouchEventMs = perfNowMs();
+      if (e.changedTouches) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          onUnifiedPointerDown(
+            { pointerId: t.identifier, pointerType: "touch", clientX: t.clientX, clientY: t.clientY, timeStamp: e.timeStamp },
+            "touch"
+          );
+        }
       }
-      const t = e.touches[0];
-      updateStarPointerFromScreen(t.clientX, t.clientY);
-      touchGesture.active = true;
-      touchGesture.id = t.identifier;
-      touchGesture.startX = t.clientX;
-      touchGesture.startY = t.clientY;
-      touchGesture.lastX = t.clientX;
-      touchGesture.lastY = t.clientY;
-      touchGesture.isDragging = false;
     },
     { passive: false }
   );
@@ -9075,22 +9587,18 @@
   canvas.addEventListener(
     "touchmove",
     (e) => {
-      recentTouchMs = performance.now();
-      if (!touchGesture.active || !e.touches || e.touches.length !== 1) return;
-      const t = e.touches[0];
-      updateStarPointerFromScreen(t.clientX, t.clientY);
-      const totalDist = Math.hypot(t.clientX - touchGesture.startX, t.clientY - touchGesture.startY);
-      if (totalDist >= 8) {
-        touchGesture.isDragging = true;
+      if (e.cancelable && typeof e.preventDefault === "function") e.preventDefault();
+      if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000) return;
+      lastTouchEventMs = perfNowMs();
+      if (e.changedTouches) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          onUnifiedPointerMove(
+            { pointerId: t.identifier, pointerType: "touch", clientX: t.clientX, clientY: t.clientY, timeStamp: e.timeStamp },
+            "touch"
+          );
+        }
       }
-      if (touchGesture.isDragging) {
-        if (typeof e.preventDefault === "function") e.preventDefault();
-        const dx = t.clientX - touchGesture.lastX;
-        const dy = t.clientY - touchGesture.lastY;
-        applyPanDeltaScreen(dx, dy);
-      }
-      touchGesture.lastX = t.clientX;
-      touchGesture.lastY = t.clientY;
     },
     { passive: false }
   );
@@ -9098,87 +9606,53 @@
   canvas.addEventListener(
     "touchend",
     (e) => {
-      recentTouchMs = performance.now();
-      if (!touchGesture.active) return;
-      const wasDragging = touchGesture.isDragging;
-      const tapX = touchGesture.lastX;
-      const tapY = touchGesture.lastY;
-      touchGesture.active = false;
-      touchGesture.isDragging = false;
-
-      if (!wasDragging) {
-        if (typeof e.preventDefault === "function") e.preventDefault();
-        handleWorldClick(tapX, tapY);
+      if (e.cancelable && typeof e.preventDefault === "function") e.preventDefault();
+      if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000) return;
+      lastTouchEventMs = perfNowMs();
+      if (e.changedTouches) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          onUnifiedPointerUp(
+            { pointerId: t.identifier, pointerType: "touch", clientX: t.clientX, clientY: t.clientY, timeStamp: e.timeStamp },
+            "touch",
+            false
+          );
+        }
       }
     },
     { passive: false }
   );
 
   canvas.addEventListener("touchcancel", () => {
-    touchGesture.active = false;
-    touchGesture.isDragging = false;
+    if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000) return;
+    activePointers.clear();
+    gesture.isDragging = false;
+    panVelocity.x = 0;
+    panVelocity.y = 0;
   });
 
-  const mouseGesture = {
-    down: false,
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-    isDragging: false,
-    suppressClickUntil: 0
-  };
-
+  // Legacy mouse fallback ONLY if Pointer Events did not fire
   canvas.addEventListener("mousedown", (e) => {
-    if (performance.now() - recentTouchMs < 500) return;
-    if (e.button !== 0) return;
-    mouseGesture.down = true;
-    mouseGesture.startX = e.clientX;
-    mouseGesture.startY = e.clientY;
-    mouseGesture.lastX = e.clientX;
-    mouseGesture.lastY = e.clientY;
-    mouseGesture.isDragging = false;
+    if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000 || perfNowMs() - lastTouchEventMs < 1000) return;
+    onUnifiedPointerDown(e, "mouse");
   });
 
-  canvas.addEventListener("mousemove", (e) => {
-    if (performance.now() - recentTouchMs < 500) return;
-    lastPointerScreen.x = e.clientX;
-    lastPointerScreen.y = e.clientY;
-    lastPointerScreen.active = true;
+  window.addEventListener(
+    "mousemove",
+    (e) => {
+      if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000 || perfNowMs() - lastTouchEventMs < 1000) return;
+      onUnifiedPointerMove(e, "mouse");
+    },
+    { passive: true }
+  );
 
-    if (mouseGesture.down) {
-      const dist = Math.hypot(e.clientX - mouseGesture.startX, e.clientY - mouseGesture.startY);
-      if (dist >= 7) {
-        mouseGesture.isDragging = true;
-      }
-      if (mouseGesture.isDragging) {
-        const dx = e.clientX - mouseGesture.lastX;
-        const dy = e.clientY - mouseGesture.lastY;
-        applyPanDeltaScreen(dx, dy);
-      }
-      mouseGesture.lastX = e.clientX;
-      mouseGesture.lastY = e.clientY;
-      if (mouseGesture.isDragging) return;
-    }
-
-    portraitTouchToggled = false;
-    isPortraitHovered = hitTestPortrait(e.clientX, e.clientY);
-    hoveredHit = hitTestWorld(e.clientX, e.clientY);
-    canvas.classList.toggle("is-pointer", Boolean(hoveredHit || isPortraitHovered));
-  });
-
-  window.addEventListener("mouseup", () => {
-    if (mouseGesture.down && mouseGesture.isDragging) {
-      mouseGesture.suppressClickUntil = performance.now() + 180;
-    }
-    mouseGesture.down = false;
-    mouseGesture.isDragging = false;
+  window.addEventListener("mouseup", (e) => {
+    if (pointerSequenceActive || perfNowMs() - lastPointerEventMs < 1000 || perfNowMs() - lastTouchEventMs < 1000) return;
+    onUnifiedPointerUp(e, "mouse", false);
   });
 
   canvas.addEventListener("mouseleave", () => {
     lastPointerScreen.active = false;
-    mouseGesture.down = false;
-    mouseGesture.isDragging = false;
     if (!portraitTouchToggled) {
       isPortraitHovered = false;
     }
@@ -9186,10 +9660,11 @@
     canvas.classList.remove("is-pointer");
   });
 
+  // Standalone click fallback (suppressed automatically whenever pointerup/touchend handled the gesture!)
   canvas.addEventListener("click", (e) => {
-    if (performance.now() - recentTouchMs < 500) return;
-    if (performance.now() < mouseGesture.suppressClickUntil) return;
-    handleWorldClick(e.clientX, e.clientY);
+    if (pointerSequenceActive || perfNowMs() < suppressNativeClickUntil) return;
+    worldTapCount++;
+    handleWorldClick(e.clientX, e.clientY, "mouse");
   });
 
   window.addEventListener(
@@ -10623,14 +11098,42 @@
     setLine("miter-seam-br", vw, vh, vw - fw, vh - fw);
   }
 
-  function handleResize() {
-    vw = window.innerWidth;
-    vh = window.innerHeight;
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.floor(vw * dpr);
-    canvas.height = Math.floor(vh * dpr);
+  function resizeCanvas(force) {
+    const newVw = Math.max(1, Math.round(window.innerWidth || 0));
+    const newVh = Math.max(1, Math.round(window.innerHeight || 0));
+    const newDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const targetW = Math.floor(newVw * newDpr);
+    const targetH = Math.floor(newVh * newDpr);
+
+    if (
+      !force &&
+      newVw === vw &&
+      newVh === vh &&
+      newDpr === dpr &&
+      canvas.width === targetW &&
+      canvas.height === targetH
+    ) {
+      return;
+    }
+
+    vw = newVw;
+    vh = newVh;
+    dpr = newDpr;
+
+    if (canvas.width !== targetW) canvas.width = targetW;
+    if (canvas.height !== targetH) canvas.height = targetH;
+
     syncVintageFrameMiterSeams();
     syncCameraToActiveState(false);
+
+    // Synchronous immediate redraw prevents blank-frame flash during mobile URL bar resize!
+    if (isBootReady) {
+      stepFrame(lastFrameMs);
+    }
+  }
+
+  function handleResize() {
+    resizeCanvas(false);
   }
 
   window.addEventListener("resize", handleResize);
@@ -10698,9 +11201,20 @@
         lvl2Erasing: { ...lvl2Erasing },
         meBioType,
         meBioErasing,
+        dpr,
+        vw,
+        vh,
         cam: { ...cam },
         baseCam: { ...baseCam },
         targetCam: { ...targetCam },
+        baseTargetCam: { ...baseTargetCam },
+        userPan: { ...userPan },
+        panVelocity: { ...panVelocity },
+        userZoomMul,
+        isDragging: isAnyDragActive(),
+        worldTapCount,
+        lastTreeSliceCount,
+        lastTreeDrawCalls,
         groundScreenY,
         groundScreenRatio: groundScreenY / Math.max(1, vh),
         backHidden: btnBack ? btnBack.hidden : true,
@@ -10765,6 +11279,7 @@
         totalChalkPatternCalls,
         projectHalftoneCardIds: Object.keys(projectPhotoCards),
         projectPhotoHover: { ...projectPhotoHover },
+        projectPhotoTouchReveal: { ...projectPhotoTouchReveal },
         projectPhotoLoadState: Object.fromEntries(
           Object.entries(projectPhotoLoadState).map(([k, st]) => [
             k,
@@ -10917,10 +11432,11 @@
       syncMusicUI();
       syncCameraToActiveState(true);
     },
+    resizeCanvas,
     resizeViewport(nextW, nextH) {
       window.innerWidth = nextW;
       window.innerHeight = nextH;
-      handleResize();
+      resizeCanvas(true);
       syncCameraToActiveState(true);
     },
     stepFrame,
@@ -10932,7 +11448,7 @@
   // Boot
   syncCanvasFontVars();
   initChalkTextPatterns();
-  handleResize();
+  resizeCanvas(true);
   initViewportGrain();
   buildBotanicalBuffers();
   initMePortraitBuffer();
@@ -10942,8 +11458,10 @@
   discoverLocalMusicFiles();
   syncMusicUI();
   syncCameraToActiveState(true);
+  isBootReady = true;
   if (typeof document !== "undefined" && document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
     Promise.resolve(document.fonts.ready).then(() => {
+      wrapLinesCache.clear();
       syncCanvasFontVars();
       syncCameraToActiveState(false);
     }).catch(() => {});
