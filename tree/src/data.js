@@ -6,7 +6,7 @@ window.SITE_DATA = {
     "backLabel": "↩",
     "collapseNote": "← fold branch",
     "readMore": "branch out →",
-    "musicNote": "maybe you'll know me better<br />if you listen to what i like!",
+    "musicNote": "maybe you'll know me better<br />if you listen to what I like!",
     "playlistTitle": "music playlist · 5 tracks",
     "emptyCapsuleLabel": "—",
     "emptyDrawerHint": "no tracks yet",
@@ -15,13 +15,13 @@ window.SITE_DATA = {
     "sequentialLabel": "sequential",
     "copiedPrefix": "copied",
     "identity": {
-      "name": "mamdouh kassab ismail",
+      "name": "Mamdouh Kassab Ismail",
       "role": "senior bilingual content writer, marketing consultant & creative director",
-      "location": "jeddah, saudi arabia",
+      "location": "Jeddah, Saudi Arabia",
       "phone": "+966 56 332 1033",
       "email": "mkassab1984@gmail.com",
       "experience": "15+ years of content & creative experience",
-      "languages": "languages: arabic & english — professional writing, translation and localization"
+      "languages": "languages: Arabic & English — professional writing, translation and localization"
     },
     "playlist": [
       {
