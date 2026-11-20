@@ -57,38 +57,16 @@
 
     <!-- Fixed full-viewport Vintage Mitered Shadow-Box Frame (z-index: 9990, right beneath #film-grain) -->
     <div id="vintage-frame" class="vintage-frame" aria-hidden="true">
+      <div class="frame-vignette"></div>
       <div class="frame-rail frame-rail-top"></div>
       <div class="frame-rail frame-rail-right"></div>
       <div class="frame-rail frame-rail-bottom"></div>
       <div class="frame-rail frame-rail-left"></div>
-      <div class="frame-vignette"></div>
       <svg class="vintage-frame-svg" id="vintage-frame-svg" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <svg class="miter-corner miter-tl" x="0" y="0" width="14" height="14" viewBox="0 0 14 14" preserveAspectRatio="none">
-          <line x1="0" y1="0" x2="14" y2="14" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.35" />
-          <line x1="0.7" y1="0" x2="14" y2="13.3" stroke="rgba(210, 215, 225, 0.08)" stroke-width="0.65" />
-        </svg>
-        <svg class="miter-corner miter-tr" x="100%" y="0" width="14" height="14" viewBox="0 0 14 14" preserveAspectRatio="none" style="overflow:visible">
-          <g transform="translate(-14, 0)">
-            <line x1="14" y1="0" x2="0" y2="14" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.35" />
-            <line x1="13.3" y1="0" x2="0" y2="13.3" stroke="rgba(210, 215, 225, 0.07)" stroke-width="0.65" />
-          </g>
-        </svg>
-        <svg class="miter-corner miter-bl" x="0" y="100%" width="14" height="14" viewBox="0 0 14 14" preserveAspectRatio="none" style="overflow:visible">
-          <g transform="translate(0, -14)">
-            <line x1="0" y1="14" x2="14" y2="0" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.35" />
-            <line x1="0" y1="13.3" x2="13.3" y2="0" stroke="rgba(210, 215, 225, 0.07)" stroke-width="0.65" />
-          </g>
-        </svg>
-        <svg class="miter-corner miter-br" x="100%" y="100%" width="14" height="14" viewBox="0 0 14 14" preserveAspectRatio="none" style="overflow:visible">
-          <g transform="translate(-14, -14)">
-            <line x1="14" y1="14" x2="0" y2="0" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.35" />
-            <line x1="14" y1="13.3" x2="0.7" y2="0" stroke="rgba(210, 215, 225, 0.06)" stroke-width="0.65" />
-          </g>
-        </svg>
-        <line id="miter-seam-tl" x1="0" y1="0" x2="14" y2="14" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.25" />
-        <line id="miter-seam-tr" x1="1440" y1="0" x2="1426" y2="14" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.25" />
-        <line id="miter-seam-bl" x1="0" y1="900" x2="14" y2="886" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.25" />
-        <line id="miter-seam-br" x1="1440" y1="900" x2="1426" y2="886" stroke="rgba(4, 5, 8, 0.94)" stroke-width="1.25" />
+        <line id="miter-seam-tl" x1="0" y1="0" x2="14" y2="14" stroke="rgba(0, 0, 0, 0.65)" stroke-width="1.25" />
+        <line id="miter-seam-tr" x1="1440" y1="0" x2="1426" y2="14" stroke="rgba(0, 0, 0, 0.65)" stroke-width="1.25" />
+        <line id="miter-seam-bl" x1="0" y1="900" x2="14" y2="886" stroke="rgba(0, 0, 0, 0.65)" stroke-width="1.25" />
+        <line id="miter-seam-br" x1="1440" y1="900" x2="1426" y2="886" stroke="rgba(0, 0, 0, 0.65)" stroke-width="1.25" />
       </svg>
     </div>
 

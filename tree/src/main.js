@@ -8201,17 +8201,17 @@
   }
 
   function stepAnimations(dt) {
-    // 1. ~1.45s True Botanical Growth-Order Stipple Reveal at 1:1 proportions
-    const treeRaw = clamp(introElapsed / 1.45, 0, 1);
+    // 1. ~1.32s True Botanical Growth-Order Stipple Reveal at 1:1 proportions (+10% speed)
+    const treeRaw = clamp(introElapsed / 1.32, 0, 1);
     introTreeProgress = easeOutCubic(treeRaw);
     treeGrow = introTreeProgress;
     introGrow = introTreeProgress;
 
-    const rootsRaw = clamp(introElapsed / 1.35, 0, 1);
+    const rootsRaw = clamp(introElapsed / 1.23, 0, 1);
     rootsGrow = easeOutCubic(rootsRaw);
 
-    // 2. Smooth, dreamy reference-faithful camera glide (damping 3.5 -> ~1.0s-1.2s glide; direct drag stays 0ms instant)
-    const camEase = 1 - Math.exp(-3.5 * dt);
+    // 2. Smooth, poised camera glide (damping 3.9 -> +11% speed; direct drag stays 0ms instant)
+    const camEase = 1 - Math.exp(-3.9 * dt);
     const goalX = targetCam.x + panOffset.x;
     const goalY = targetCam.y + panOffset.y;
     baseCam.x += (goalX - baseCam.x) * camEase;
@@ -8219,10 +8219,10 @@
     baseCam.zoom += (targetCam.zoom - baseCam.zoom) * camEase;
 
     if (!activeBranch && !hasOpenedAnyBranch) {
-      const camGlideP = easeOutCubic(clamp(introElapsed / 1.55, 0, 1));
+      const camGlideP = easeOutCubic(clamp(introElapsed / 1.41, 0, 1));
       introCamRem = 1 - camGlideP;
     } else {
-      introCamRem *= Math.exp(-3.5 * dt);
+      introCamRem *= Math.exp(-3.9 * dt);
       if (introCamRem < 0.0005) introCamRem = 0;
     }
 
@@ -8235,14 +8235,14 @@
     starMouse.x += (starMouseTarget.x - starMouse.x) * starEase;
     starMouse.y += (starMouseTarget.y - starMouse.y) * starEase;
 
-    // 3. Boot identity whisper types in calmly (~25% gentler rate) & erases smoothly (~0.38s)
-    if (!activeBranch && !hasOpenedAnyBranch && introElapsed <= 1.22) {
+    // 3. Boot identity whisper types in (+10% speed) & erases smoothly (~0.345s)
+    if (!activeBranch && !hasOpenedAnyBranch && introElapsed <= 1.10) {
       identityErasing = false;
-      identityType = clamp((introElapsed - 0.22) / 0.98, 0, 1);
+      identityType = clamp((introElapsed - 0.20) / 0.89, 0, 1);
     } else {
-      const idGoal = !activeBranch && introElapsed >= 0.22 ? 1 : 0;
+      const idGoal = !activeBranch && introElapsed >= 0.20 ? 1 : 0;
       identityErasing = identityType > idGoal;
-      identityType = approach(identityType, idGoal, 1 / 0.98, 1 / 0.38, dt);
+      identityType = approach(identityType, idGoal, 1 / 0.89, 1 / 0.345, dt);
     }
 
     // 4. Portrait & Project Photo hover interpolation
@@ -8253,7 +8253,7 @@
       isPortraitHovered = hitTestPortrait(lastPointerScreen.x, lastPointerScreen.y);
     }
     const hoverGoal = activeBranch === "me" && isPortraitHovered ? 1 : 0;
-    portraitHoverMix = approach(portraitHoverMix, hoverGoal, 1 / 0.32, 1 / 0.32, dt);
+    portraitHoverMix = approach(portraitHoverMix, hoverGoal, 1 / 0.29, 1 / 0.29, dt);
 
     const d = getLocale();
     const photoHoverEase = 1 - Math.exp(-8.5 * dt);
@@ -8275,7 +8275,7 @@
     // Gentle crown wind-sway impulse decay when a retracting branch merges back into the olive crown
     if (crownRustleImpulse > 0.001) {
       crownRustlePhase += dt;
-      crownRustleImpulse *= Math.exp(-2.4 * dt);
+      crownRustleImpulse *= Math.exp(-2.66 * dt);
       if (crownRustleImpulse < 0.001) crownRustleImpulse = 0;
     }
 
@@ -8290,46 +8290,46 @@
       const isSelected = activeBranch === k;
       const isHome = activeBranch === null;
 
-      // ~40ms/char (~25% gentler) discrete branch title typing & ~1.85x smooth backwards erase!
+      // ~36.4ms/char (+10% speed) discrete branch title typing & ~1.85x smooth backwards erase!
       const charCount = Math.max(4, (bCfg.label || "").length);
-      const labelWriteDur = charCount * 0.040;
-      const labelEraseDur = Math.max(0.14, labelWriteDur / 1.85);
+      const labelWriteDur = charCount * 0.0364;
+      const labelEraseDur = Math.max(0.127, labelWriteDur / 1.85);
       const labelRateUp = 1 / labelWriteDur;
       const labelRateDown = 1 / labelEraseDur;
 
       if (isHome) {
-        const twigStart = 1.00 + bIdx * 0.095;
-        if (!hasOpenedAnyBranch && introElapsed < 2.35) {
+        const twigStart = 0.91 + bIdx * 0.086;
+        if (!hasOpenedAnyBranch && introElapsed < 2.14) {
           mainTwigGrow[k] =
             introElapsed <= twigStart
               ? 0
-              : clamp((introElapsed - twigStart) / 0.50, 0, 1);
+              : clamp((introElapsed - twigStart) / 0.45, 0, 1);
         } else {
           const canExtend = introElapsed > twigStart && maxAnyLimb < 0.44;
-          mainTwigGrow[k] = approach(mainTwigGrow[k], canExtend ? 1 : 0, 1 / 0.50, 1 / 0.44, dt);
+          mainTwigGrow[k] = approach(mainTwigGrow[k], canExtend ? 1 : 0, 1 / 0.45, 1 / 0.40, dt);
         }
 
-        const labelGoal = mainTwigGrow[k] >= 0.52 ? 1 : 0;
+        const labelGoal = mainTwigGrow[k] >= 0.48 ? 1 : 0;
         mainLabelErasing[k] = mainLabelType[k] > labelGoal;
         mainLabelType[k] = approach(mainLabelType[k], labelGoal, labelRateUp, labelRateDown, dt);
-        underlineProg[k] = approach(underlineProg[k], 0, 2.2, 2.8, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 2.44, 3.11, dt);
       } else if (isSelected && k === "experience") {
         // Smoothly retract horizontal resting label/twig as the arching experience bough takes over
         mainLabelErasing[k] = mainLabelType[k] > 0;
         mainLabelType[k] = approach(mainLabelType[k], 0, labelRateUp, labelRateDown * 1.15, dt);
-        mainTwigGrow[k] = approach(mainTwigGrow[k], mainLabelType[k] > 0.18 ? 1 : 0, 2.2, 2.4, dt);
-        underlineProg[k] = approach(underlineProg[k], 0, 2.2, 2.8, dt);
+        mainTwigGrow[k] = approach(mainTwigGrow[k], mainLabelType[k] > 0.18 ? 1 : 0, 2.44, 2.66, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 2.44, 3.11, dt);
       } else if (isSelected) {
-        mainTwigGrow[k] = approach(mainTwigGrow[k], 1, 2.2, 2.2, dt);
+        mainTwigGrow[k] = approach(mainTwigGrow[k], 1, 2.44, 2.44, dt);
         mainLabelErasing[k] = false;
         mainLabelType[k] = approach(mainLabelType[k], 1, labelRateUp, labelRateDown, dt);
-        underlineProg[k] = approach(underlineProg[k], 1, 2.0, 2.6, dt);
+        underlineProg[k] = approach(underlineProg[k], 1, 2.22, 2.89, dt);
       } else {
         mainLabelErasing[k] = mainLabelType[k] > 0;
         mainLabelType[k] = approach(mainLabelType[k], 0, labelRateUp, labelRateDown, dt);
         const twigGoal = mainLabelType[k] > 0.22 ? 1 : 0;
-        mainTwigGrow[k] = approach(mainTwigGrow[k], twigGoal, 2.2, 2.3, dt);
-        underlineProg[k] = approach(underlineProg[k], 0, 2.2, 2.8, dt);
+        mainTwigGrow[k] = approach(mainTwigGrow[k], twigGoal, 2.44, 2.55, dt);
+        underlineProg[k] = approach(underlineProg[k], 0, 2.44, 3.11, dt);
       }
 
       let maxChildItemType = 0;
@@ -8339,22 +8339,22 @@
         if ((subTwigGrow[it.id] || 0) > maxChildSubTwig) maxChildSubTwig = subTwigGrow[it.id] || 0;
       });
 
-      // Reference-Faithful Calm Branch Opening & Overlapping Closing Choreography:
-      // - Main branches (work, writing, me): open over ~1.05s, close over ~0.92s (with ~0.36s ~1.85x backwards erase overlapping organically)
-      // - Experience arching bough: opens over ~1.38s, closes over ~0.98s
+      // Calibrated +11% Speed Dial-Up (neither sluggish nor fast):
+      // - Main branches (work, writing, me): open ~0.96s, close ~0.86s
+      // - Experience arching bough: open ~1.24s, close ~0.88s
       if (k === "me") {
-        const bioGoal = isSelected && branchLimbGrow.me >= 0.52 ? 1 : 0;
+        const bioGoal = isSelected && branchLimbGrow.me >= 0.48 ? 1 : 0;
         meBioErasing = meBioType > bioGoal;
-        meBioType = approach(meBioType, bioGoal, 1 / 0.98, 1 / 0.36, dt); // ~0.36s calm backwards erase
+        meBioType = approach(meBioType, bioGoal, 1 / 0.89, 1 / 0.327, dt);
 
-        const headGoal = isSelected && branchLimbGrow.me >= 0.56 ? 1 : 0;
+        const headGoal = isSelected && branchLimbGrow.me >= 0.52 ? 1 : 0;
         meProjectsHeadingErasing = meProjectsHeadingType > headGoal;
-        meProjectsHeadingType = approach(meProjectsHeadingType, headGoal, 1 / 0.70, 1 / 0.35, dt);
+        meProjectsHeadingType = approach(meProjectsHeadingType, headGoal, 1 / 0.636, 1 / 0.318, dt);
 
         const meHoldWhileText = meBioType > 0.85 || maxChildItemType > 0.85;
         const meGoal = isSelected ? 1 : meHoldWhileText ? 1 : 0;
         branchRetracting.me = branchRaw.me > meGoal;
-        branchRaw.me = approach(branchRaw.me, meGoal, 1 / 1.14, 1 / 0.98, dt);
+        branchRaw.me = approach(branchRaw.me, meGoal, 1 / 1.02, 1 / 0.90, dt);
         branchLimbGrow.me = branchRetracting.me
           ? easeInOutCubic(branchRaw.me)
           : easeOrganicBranch(branchRaw.me);
@@ -8362,7 +8362,7 @@
         const expHoldWhileText = maxChildItemType > 0.85;
         const expGoal = isSelected ? 1 : expHoldWhileText ? 1 : 0;
         expBoughRetracting = expBoughRaw > expGoal;
-        expBoughRaw = approach(expBoughRaw, expGoal, 1 / 1.42, 1 / 1.04, dt);
+        expBoughRaw = approach(expBoughRaw, expGoal, 1 / 1.28, 1 / 0.935, dt);
         expBoughGrow = expBoughRetracting
           ? easeInOutCubic(expBoughRaw)
           : easeOutCubic(expBoughRaw);
@@ -8372,7 +8372,7 @@
         const stdHoldWhileText = maxChildItemType > 0.85;
         const limbGoal = isSelected ? 1 : stdHoldWhileText ? 1 : 0;
         branchRetracting[k] = branchRaw[k] > limbGoal;
-        branchRaw[k] = approach(branchRaw[k], limbGoal, 1 / 1.14, 1 / 0.98, dt);
+        branchRaw[k] = approach(branchRaw[k], limbGoal, 1 / 1.02, 1 / 0.90, dt);
         branchLimbGrow[k] = branchRetracting[k]
           ? easeInOutCubic(branchRaw[k])
           : easeOrganicBranch(branchRaw[k]);
@@ -8392,23 +8392,23 @@
           !isExpClosingThisYear &&
           (activeItem === id || expandedItems.has(id));
 
-        const lvl2OpenDur = k === "experience" ? 0.85 : 0.68;
-        const lvl2RetractDur = k === "experience" ? 0.72 : 0.62;
+        const lvl2OpenDur = k === "experience" ? 0.766 : 0.613;
+        const lvl2RetractDur = k === "experience" ? 0.649 : 0.559;
 
         if (isItemSelected) {
           itemRaw[id] = approach(curItemRaw, 1, 1 / lvl2OpenDur, 1 / lvl2RetractDur, dt);
           lvl2ShootGrow[id] = easeOutCubic(itemRaw[id]);
-          const t2Goal = lvl2ShootGrow[id] >= 0.52 ? 1 : 0;
+          const t2Goal = lvl2ShootGrow[id] >= 0.48 ? 1 : 0;
           lvl2Erasing[id] = curT2 > t2Goal;
-          lvl2Type[id] = approach(curT2, t2Goal, 1 / 0.85, 1 / 0.36, dt);
+          lvl2Type[id] = approach(curT2, t2Goal, 1 / 0.773, 1 / 0.327, dt);
           if (k === "experience" && activeExpYear === id) {
             expYearShootRaw = itemRaw[id];
             expYearShootGrow = lvl2ShootGrow[id];
           }
         } else {
-          // Calm sub-item collapse: ~0.36s backwards erase overlapping with ~0.62s (~0.72s for experience) cubic-in-out shoot folding
+          // Calibrated +11% speed sub-item collapse
           lvl2Erasing[id] = curT2 > 0;
-          lvl2Type[id] = approach(curT2, 0, 1 / 0.85, 1 / 0.36, dt);
+          lvl2Type[id] = approach(curT2, 0, 1 / 0.773, 1 / 0.327, dt);
           const holdShoot = lvl2Type[id] > 0.84 ? 1 : 0;
           itemRaw[id] = approach(curItemRaw, holdShoot, 1 / lvl2OpenDur, 1 / lvl2RetractDur, dt);
           lvl2ShootGrow[id] = easeInOutCubic(itemRaw[id]);
@@ -8437,47 +8437,47 @@
 
         const sumGoal =
           isSelected && activeItem && !closingExpYear && activeItem !== id ? 0.28 : 1.0;
-        siblingSumFactor[id] = approach(curSumF, sumGoal, 1.9, 2.2, dt);
+        siblingSumFactor[id] = approach(curSumF, sumGoal, 2.11, 2.44, dt);
 
         if (k === "experience") {
           const nodeT = typeof it.t === "number" ? it.t : 0.16 + idx * 0.15;
           if (isSelected) {
             const sproutThreshold = idx === 5 ? 0.93 : nodeT - 0.02;
             const canSprout = expBoughGrow >= sproutThreshold;
-            subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.68, 1 / 0.52, dt);
+            subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.613, 1 / 0.468, dt);
             subTwigGrow[id] = canSprout ? easeOutCubic(subTwigRaw[id]) : easeInOutCubic(subTwigRaw[id]);
-            const yrGoal = subTwigGrow[id] >= 0.52 ? 1 : 0;
+            const yrGoal = subTwigGrow[id] >= 0.48 ? 1 : 0;
             itemErasing[id] = curType > yrGoal;
-            itemType[id] = approach(curType, yrGoal, 1 / 0.46, 1 / 0.34, dt);
+            itemType[id] = approach(curType, yrGoal, 1 / 0.418, 1 / 0.309, dt);
           } else {
             itemErasing[id] = curType > 0;
-            itemType[id] = approach(curType, 0, 1 / 0.46, 1 / 0.34, dt);
+            itemType[id] = approach(curType, 0, 1 / 0.418, 1 / 0.309, dt);
             const subGoal = (itemType[id] > 0.58 || lvl2ShootGrow[id] > 0.20) && expBoughGrow >= nodeT * 0.85 ? 1 : 0;
-            subTwigRaw[id] = approach(curSubRaw, subGoal, 1 / 0.68, 1 / 0.52, dt);
+            subTwigRaw[id] = approach(curSubRaw, subGoal, 1 / 0.613, 1 / 0.468, dt);
             subTwigGrow[id] = easeInOutCubic(subTwigRaw[id]);
           }
         } else if (isSelected && k === "me") {
           const matchesFlt = isMeProjectMatchingFilter(it);
-          const stagger = Math.min(0.52, idx * 0.062);
-          const canSprout = matchesFlt && branchLimbGrow.me > 0.24 + stagger;
-          subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.82, 1 / 0.56, dt);
+          const stagger = Math.min(0.47, idx * 0.056);
+          const canSprout = matchesFlt && branchLimbGrow.me > 0.22 + stagger;
+          subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.739, 1 / 0.505, dt);
           subTwigGrow[id] = canSprout ? easeOrganicBranch(subTwigRaw[id]) : easeInOutCubic(subTwigRaw[id]);
-          const itemGoal = matchesFlt && subTwigGrow[id] >= 0.52 ? 1 : 0;
+          const itemGoal = matchesFlt && subTwigGrow[id] >= 0.48 ? 1 : 0;
           itemErasing[id] = curType > itemGoal;
-          itemType[id] = approach(curType, itemGoal, 1 / 0.86, 1 / 0.36, dt);
+          itemType[id] = approach(curType, itemGoal, 1 / 0.782, 1 / 0.327, dt);
         } else if (isSelected) {
-          const stagger = Math.min(0.56, idx * 0.085);
-          const canSprout = branchLimbGrow[k] > 0.24 + stagger;
-          subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.82, 1 / 0.56, dt);
+          const stagger = Math.min(0.50, idx * 0.077);
+          const canSprout = branchLimbGrow[k] > 0.22 + stagger;
+          subTwigRaw[id] = approach(curSubRaw, canSprout ? 1 : 0, 1 / 0.739, 1 / 0.505, dt);
           subTwigGrow[id] = canSprout ? easeOrganicBranch(subTwigRaw[id]) : easeInOutCubic(subTwigRaw[id]);
-          const itemGoal = subTwigGrow[id] >= 0.52 ? 1 : 0;
+          const itemGoal = subTwigGrow[id] >= 0.48 ? 1 : 0;
           itemErasing[id] = curType > itemGoal;
-          itemType[id] = approach(curType, itemGoal, 1 / 0.90, 1 / 0.36, dt);
+          itemType[id] = approach(curType, itemGoal, 1 / 0.818, 1 / 0.327, dt);
         } else {
           itemErasing[id] = curType > 0;
-          itemType[id] = approach(curType, 0, 1 / 0.90, 1 / 0.36, dt);
+          itemType[id] = approach(curType, 0, 1 / 0.818, 1 / 0.327, dt);
           const subGoal = itemType[id] > 0.62 || lvl2ShootGrow[id] > 0.22 ? 1 : 0;
-          subTwigRaw[id] = approach(curSubRaw, subGoal, 1 / 0.82, 1 / 0.56, dt);
+          subTwigRaw[id] = approach(curSubRaw, subGoal, 1 / 0.739, 1 / 0.505, dt);
           subTwigGrow[id] = easeInOutCubic(subTwigRaw[id]);
         }
       });
